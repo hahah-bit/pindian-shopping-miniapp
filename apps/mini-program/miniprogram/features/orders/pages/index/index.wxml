@@ -1,1 +1,38 @@
-<view class="page"><view class="card"><view class="badge">待开发</view><view class="title">我的订单</view><view class="subtitle">当前没有接入用户与交易数据。下单、支付、拼单进度、退款和独立发货会逐个实现。</view></view></view>
+<view class="page">
+  <view class="notice">微信支付暂未开放，开放后可在订单中支付</view>
+
+  <view wx:if="{{needLogin}}" class="state">
+    <text>登录后查看自己的订单</text>
+    <button bindtap="goLogin" type="button">去登录</button>
+  </view>
+
+  <view wx:elif="{{loading && !items.length}}" class="state">正在加载订单…</view>
+
+  <view wx:elif="{{error}}" class="state error-state">
+    <text>{{error}}</text>
+    <button bindtap="retry" type="button">重试</button>
+  </view>
+
+  <view wx:elif="{{items.length === 0}}" class="state">
+    <text>还没有订单</text>
+    <button bindtap="goHome" type="button">去逛逛</button>
+  </view>
+
+  <block wx:else>
+    <view wx:for="{{items}}" wx:key="id" class="order-card" data-id="{{item.id}}" bindtap="openDetail" hover-class="hover">
+      <view class="row1">
+        <text class="order-no">{{item.orderNo}}</text>
+        <text class="status {{item.status}}">{{item.statusText}}</text>
+      </view>
+      <view class="row2">
+        <text>{{item.unitsLabel}}</text>
+        <text class="amount">¥{{item.amountText}}</text>
+      </view>
+      <view class="row3">
+        <text class="time">{{item.createdAtText}}</text>
+        <button wx:if="{{item.canCancel}}" size="mini" class="danger" data-id="{{item.id}}" catchtap="onCancel" loading="{{busyId === item.id}}" disabled="{{busyId === item.id}}">取消订单</button>
+      </view>
+    </view>
+    <view wx:if="{{!hasMore}}" class="load-more">没有更多了</view>
+  </block>
+</view>

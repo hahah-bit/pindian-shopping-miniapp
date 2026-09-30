@@ -1,4 +1,7 @@
 import { getProductDetail, toCatalogError } from '../../../../platform/api-catalog';
+import { placeOrder, ApiError as OrderApiError } from '../../../../platform/order-api';
+import { listAddresses, storedUserToken } from '../../../../platform/user-auth';
+import type { AddressView } from '@pindian/contracts';
 import { apiConfig } from '../../../../platform/config';
 import { formatFen } from '../../../../utils/format';
 import type { MiniProductView } from '@pindian/contracts';
@@ -17,6 +20,12 @@ type DetailData = Omit<MiniProductView, 'shareOptions'> & {
   quantitySummary: string;
   gallery: { url: string; failed: boolean }[];
   shareOptions: ShareOptionItem[];
+  order: import('@pindian/contracts').MiniOrderView | null;
+  orderPanelOpen: boolean;
+  selectedUnits: number | null;
+  selectedAddress: { id: string; label: string } | null;
+  placingOrder: boolean;
+  orderError: string;
 };
 
 Page<DetailData, WechatMiniprogram.IAnyObject>({
@@ -42,7 +51,13 @@ Page<DetailData, WechatMiniprogram.IAnyObject>({
     fromPriceText: '',
     quantitySummary: '',
     gallery: [],
-    shareOptions: []
+    shareOptions: [],
+    order: null,
+    orderPanelOpen: false,
+    selectedUnits: null,
+    selectedAddress: null as { id: string; label: string } | null,
+    placingOrder: false,
+    orderError: ''
   },
 
   onLoad(query: Record<string, string | undefined>) {
@@ -95,5 +110,68 @@ Page<DetailData, WechatMiniprogram.IAnyObject>({
 
   retry() {
     void this.load();
+  },
+
+  /** 点击份额卡片选中/取消；未登录先提示。 */
+  toggleSelectShare(event: WechatMiniprogram.TouchEvent) {
+    const units = Number((event.currentTarget.dataset as { units?: number }).units);
+    if (!storedUserToken()) {
+      wx.showToast({ title: '请先登录后再下单', icon: 'none' });
+      return;
+    }
+    if (this.data.soldOut) {
+      wx.showToast({ title: '商品已售罄', icon: 'none' });
+      return;
+    }
+    this.setData({ selectedUnits: this.data.selectedUnits === units ? null : units, orderError: '' });
+  },
+
+  async openOrderPanel() {
+    if (this.data.selectedUnits === null) {
+      wx.showToast({ title: '请先选择份额', icon: 'none' });
+      return;
+    }
+    this.setData({ orderPanelOpen: true, orderError: '' });
+    try {
+      const result = await listAddresses();
+      const preferred = result.items.find((a) => a.isDefault) ?? result.items[0] ?? null;
+      this.setData({
+        selectedAddress: preferred ? { id: preferred.id, label: `${preferred.receiverName} ${preferred.phone}（${preferred.province}${preferred.city}${preferred.district} ${preferred.detail}）` } : null
+      });
+    } catch (cause) {
+      void cause;
+      this.setData({ selectedAddress: null });
+    }
+  },
+
+  closeOrderPanel() {
+    this.setData({ orderPanelOpen: false, orderError: '' });
+  },
+
+  goToAddresses() {
+    wx.navigateTo({ url: '/features/address/pages/list/index' });
+  },
+
+  /** 提交订单：金额由服务端计算；客户端只传商品/份额/地址与幂等键。 */
+  async submitOrder() {
+    if (this.data.placingOrder) return;
+    const units = this.data.selectedUnits;
+    if (!units || !this.data.order) return;
+    if (!this.data.selectedAddress) {
+      this.setData({ orderError: '请先添加收货地址' });
+      return;
+    }
+    this.setData({ placingOrder: true, orderError: '' });
+    try {
+      const result = await placeOrder(this.data.order.id, units, this.data.selectedAddress.id);
+      this.setData({ orderPanelOpen: false });
+      wx.navigateTo({ url: `/features/orders/pages/detail/index?id=${result.id}` });
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : '下单失败';
+      this.setData({ orderError: message });
+      if (cause instanceof OrderApiError && cause.code === 'UNAUTHENTICATED') wx.showToast({ title: '请先登录', icon: 'none' });
+    } finally {
+      this.setData({ placingOrder: false });
+    }
   }
 });

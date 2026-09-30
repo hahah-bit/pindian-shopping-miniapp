@@ -1,0 +1,17 @@
+/* 订单详情样式。 */
+.notice { background: #fff7e6; color: #a06724; font-size: 22rpx; padding: 12rpx 24rpx; border-radius: 8rpx; margin-bottom: 20rpx; }
+.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #7b8b85; font-size: 28rpx; text-align: center; }
+.error-state { color: #a74337; }
+.card { background: white; border-radius: 16rpx; padding: 26rpx; margin-bottom: 22rpx; display: grid; gap: 14rpx; }
+.row1 { display: flex; justify-content: space-between; align-items: center; }
+.status { font-size: 32rpx; font-weight: 700; color: #a06724; }
+.countdown { color: #d0563f; font-size: 24rpx; }
+.order-no { color: #7b8b85; font-size: 24rpx; }
+.section-title { font-size: 28rpx; font-weight: 600; color: #223247; }
+.amount-row { display: flex; justify-content: space-between; font-size: 26rpx; color: #54657a; }
+.amount-row.total { border-top: 1rpx solid #f0f3f1; padding-top: 14rpx; }
+.total-amount { color: #d0563f; font-weight: 700; font-size: 32rpx; }
+.hint { color: #a5b3ad; font-size: 22rpx; line-height: 1.6; }
+.address { font-size: 28rpx; color: #223247; }
+.address-sub { color: #7b8b85; font-size: 26rpx; line-height: 1.6; }
+.danger-btn { background: #fff0ee; color: #a74337; border-radius: 12rpx; }
