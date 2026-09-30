@@ -7,7 +7,7 @@
 - 授权：用户已授权 T004 全部范围；四项业务决策已于 2026-09-30 经用户确认（见 decisions/D001–D005）。
 - 修改范围：`backend/src/contexts/{group-buying,ordering,inventory,catalog}`、`workflows`、`bootstrap`、`migrations/0009..0013`、`contracts`、`apps/mini-program`（下单/订单）、`apps/admin-web`（订单/组/库存查询）、`tests`、文档。
 - 前置功能：T002（商品/库存/后台身份）、T003（用户/地址/会话）——均已完成并自测通过；Git main 分支已有提交。
-- 当前状态：已完成（子功能 F013–F018 逐个提交；专项/全量/联调见 verification.md）。
+- 当前状态：已完成（开发自测通过；D001 边界修订待用户复核；真实微信支付/真机未验证——见 verification.md）。
 - 阻塞项：无（四项决策已确认，D005 支付边界按声明执行）。
 
 文档：[DDD](ddd.md)、[spec](spec.md)、[plan](plan.md)、[实际验收](verification.md)、[决策记录](decisions/)。

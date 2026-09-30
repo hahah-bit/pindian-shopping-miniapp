@@ -14,6 +14,10 @@
 
 - 初版把业务键塞 request_id uuid 列——类型不符。新增迁移 0009 business_key 列与唯一索引；StockAdjustCommand 扩展 businessKey/reservedDelta/allowNegativeAvailable；pg adjust 同步支持（幂等查询按列名分派）。
 
-## 未覆盖（随集成补验）
+## 集成补验（已完成）
 
-真实 PG 并发建组不超卖（G5）、组状态触发的释放/消耗全链路——由 F015/F016 集成测试覆盖后回写本记录。
+真实 PG 集成（t004/integration）：建组预留 available 3→2 / reserved 0→1 断言通过；组2 建组第二件预留通过；并发最后份额恰一人加入、败者库存 0 建组失败 STOCK_INSUFFICIENT——库存不超卖实证（G5）。组成功/截止触发的消耗与释放由内部支付用例单测与截止任务覆盖。
+
+## 原未覆盖项（已被集成补验取代）
+
+（已被上方集成补验覆盖）

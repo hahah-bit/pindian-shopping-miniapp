@@ -40,6 +40,9 @@ export class AccessGuard implements CanActivate {
     }
     const token = header.slice('Bearer '.length).trim();
     const realm = this.reflector.getAllAndOverride<AuthRealm | undefined>(REALM_KEY, [context.getHandler(), context.getClass()]);
+    if (process.env.AUTH_GUARD_DEBUG === '1') {
+      console.error('[guard]', http.getRequest<RequestWithPrincipal & { url?: string; method?: string }>().url ?? '', 'realm=', realm ?? '(admin default)', 'handler=', String(context.getHandler()?.name ?? ''));
+    }
 
     if (realm === 'user') {
       try {

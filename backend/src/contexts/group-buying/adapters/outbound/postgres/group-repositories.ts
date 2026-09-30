@@ -95,7 +95,7 @@ export class PostgresGroupRepository implements GroupRepository {
       const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
       const { rows: countRows } = await client.query<{ total: string }>(`SELECT COUNT(*)::int4 AS total FROM groups ${where}`, params);
       const { rows } = await client.query<GroupRow>(
-        `SELECT * FROM groups ${where} ORDER BY created_at DESC, id DESC LIMIT ${params.length + 1} OFFSET ${params.length + 2}`,
+        `SELECT * FROM groups ${where} ORDER BY created_at DESC, id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, query.pageSize, (query.page - 1) * query.pageSize]
       );
       return { items: rows.map(groupOf), total: Number(countRows[0]?.total ?? 0) };

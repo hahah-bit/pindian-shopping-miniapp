@@ -137,6 +137,7 @@ export class PlaceOrderWorkflow {
         return await this.createNewGroup(sellable, { userId, productId, units, address, idempotencyKey, reservationExpiresAt, deadline, now });
       } catch (error) {
         if (error instanceof ApplicationError && (error.code === 'SHARE_CAPACITY_CONFLICT' || error.code === 'GROUP_NOT_JOINABLE')) {
+          console.error('[place-order] 竞争重试', attempt + 1, error.code, error.message);
           lastConflict = error;
           continue;
         }
@@ -158,8 +159,8 @@ export class PlaceOrderWorkflow {
       if (!canJoinGroup(group.state.snapshot.allowedShareUnits, table, group.remainingCapacity, ctx.units)) {
         throw new ApplicationError('SHARE_CAPACITY_CONFLICT', '份额容量竞争失败，请重试');
       }
-      // 最后单判定（D001）：预占后恰好 60 单位 → 补差
-      const isFinalOrder = group.remainingCapacity - ctx.units === 0;
+      // 最后单判定（D001 修订）：恰好填满且组内其他单位全部已生效时补差；否则标准价（零头对账属支付阶段）
+      const isFinalOrder = group.remainingCapacity - ctx.units === 0 && group.state.paidUnits + ctx.units === 60;
       const quote = computeQuote({
         originalPriceFen: group.state.snapshot.originalPriceFen,
         units: ctx.units,

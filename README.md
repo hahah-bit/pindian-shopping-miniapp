@@ -2,7 +2,7 @@
 
 原生微信小程序 + Vue 3 管理后台 + NestJS/TypeScript 模块化后端，采用 DDD 和六边形架构。
 
-当前阶段是 **T003 用户身份、收货地址与后台用户管理（已完成，本地与集成层）**：小程序微信登录（code2Session 服务端校验）、用户会话、昵称/手机号绑定、收货地址管理、后台用户查询（脱敏+审计）已接入真实后端；T002 商品/图片/库存能力保持可用。拼单交易、下单、微信支付、退款、履约、客服和工单尚未实现。**真实微信凭据缺失：登录接口在未配置时返回明确的“未配置”错误，不伪造成功。**用户量预计不超过 1000 不等于吞吐量承诺；交易任务仍须包含事务、容量约束和幂等。
+当前阶段是 **T004 拼单匹配、份额预占与订单报价（已完成，开发自测通过）**：小程序选商品/份额/地址 → 服务端精确匹配拼单组（60 单位制、可完成性 DP）→ 整件库存预留 → 固定报价生成待支付订单 → 订单/拼单状态查询；后台订单/拼单组/库存预留查询（脱敏）。**本阶段不接入真实微信支付**：订单只能处于待支付/已取消/已失效，无任何支付或“标记已支付”接口。真实微信凭据缺失时登录与下单返回明确错误，不伪造成功。用户量预计不超过 1000 不等于吞吐量承诺；交易任务仍须包含事务、容量约束和幂等。
 
 ## 文档入口
 
@@ -12,6 +12,7 @@
 - [T001 spec](docs/tasks/T001-platform-foundation/spec.md) · [验收](docs/tasks/T001-platform-foundation/verification.md)
 - [T002 spec](docs/tasks/T002-catalog-admin-media/spec.md) · [验收](docs/tasks/T002-catalog-admin-media/verification.md)
 - [T003 spec](docs/tasks/T003-user-identity-address/spec.md) · [验收](docs/tasks/T003-user-identity-address/verification.md)
+- [T004 spec](docs/tasks/T004-group-order-reservation/spec.md) · [验收](docs/tasks/T004-group-order-reservation/verification.md) · [业务决策记录](docs/tasks/T004-group-order-reservation/decisions/)
 - [接口契约](contracts/openapi.yaml)
 
 ## Docker 启动
@@ -104,13 +105,14 @@ API：`npm run dev:api` 读取根 .env，启动并监听编译产物变化。编
 npm run test:task:t001
 npm run test:task:t002
 npm run test:task:t003
+npm run test:task:t004
 npm run smoke:docker
 npm test
 ```
 
 先通过各任务专项和实际 Docker 冒烟，再运行全量。全量入口包含所有 workspaces 类型检查、构建、源码依赖方向检查，以及 tests 下所有测试。T002 的领域规则（金额、份额、库存、权限）采用 TDD；需要 PostgreSQL 的集成测试在数据库不可达时明确 skip，不计为通过。
 
-小程序 `platform/config.ts` 默认 mode:'api'、baseUrl 指向本地 API；“我的”页支持微信登录（需在 .env 配置 WX_APPID/WX_APP_SECRET，留空时返回未配置错误）、地址管理与昵称/手机号绑定。开发者工具联调需配置网络校验，真机需 HTTPS 域名与合法域名配置。
+小程序 `platform/config.ts` 默认 mode:'api'、baseUrl 指向本地 API；“我的”页支持微信登录（需在 .env 配置 WX_APPID/WX_APP_SECRET，留空时返回未配置错误）、地址管理与昵称/手机号绑定；商品详情可选份额下单（服务端精确匹配拼单组与报价），“订单”Tab 查看订单与拼单状态。**微信支付暂未开放**。开发者工具联调需配置网络校验，真机需 HTTPS 域名与合法域名配置。
 
 ## 目录与边界
 

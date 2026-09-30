@@ -1,6 +1,6 @@
 # 拼单平台架构设计
 
-状态：T001 框架与 T002 商品/图片/身份已落地；交易模型仍需逐功能细化。日期：2026-09-30。
+状态：T001 框架、T002 商品/图片、T003 用户身份、T004 拼单匹配/份额预占/订单报价已落地；支付/履约/客服仍待实施。日期：2026-09-30。
 
 ## 范围与选型
 
@@ -43,8 +43,8 @@ flowchart TB
 | --- | --- | --- |
 | catalog | Product、ProductSpec、SalePolicySnapshot、MediaAsset（T002 已实现商品/图片） | 当前商品配置、图片资源及销售规则 |
 | inventory | Stock、StockReservation、StockMovement（T002 已实现整件库存与留痕；预留字段保留未启用） | 整件库存调整；预留属后续交易任务 |
-| group-buying | Group、ShareReservation、ShareUnits | 组容量、预占、生效及组状态 |
-| ordering | Order、PriceSnapshot、AddressSnapshot | 用户交易与不可变订单快照 |
+| group-buying | Group、ShareReservation、ShareUnits（T004 已实现：容量 60 单位制、可完成性 DP、组匹配、预占） | 组容量、预占、生效及组状态 |
+| ordering | Order、Quote、PriceSnapshot、AddressSnapshot（T004 已实现待支付订单与快照） | 用户交易与不可变订单快照；支付属后续任务 |
 | payments | Payment、Refund、Money | 实付、实退和渠道结果 |
 | fulfillment | FulfillmentOrder、Shipment、Quantity | 独立数量分配和发货事实 |
 | identity-access | User、Admin、Role、Address（T002 后台管理员；T003 用户/微信身份/用户会话/收货地址） | 后台与用户身份、会话、地址簿 |
@@ -127,10 +127,13 @@ T002 起接入鉴权与业务接口：守卫按认证域分派（admin 默认拒
 - `/api/mini/v1/products`：公开商品接口（仅上架商品）。
 - `/api/mini/v1/auth|addresses`：小程序用户登录、资料、手机号与地址接口（user 域 Bearer）。
 - `/api/admin/v1/users`：后台用户管理（user:manage 权限；脱敏 + 敏感查看审计）。
+- `/api/mini/v1/orders`：小程序下单（幂等键）/列表/详情/取消（user 域 Bearer）。
+- `/api/admin/v1/orders|groups`：后台订单与拼单组查询（order:manage；仅 GET）。
+- 内部 MarkOrderPaid 用例为 Payments 预留（无 HTTP 端点）；真实支付/退款/迟到回调属支付阶段。
 - `/api/media/v1/assets/{id}`：公开图片读取（仅 ready 资源，长缓存）。
 - 后续微信回调与客服 WebSocket 接口另行设计，当前不提供假回调或假聊天接口。
 
-API 统一包含 requestId；错误响应包含 code、message、requestId（及原因 details）。客户端不能将本地支付提示当作后端支付事实。金额以整数分表达；数量为十进制字符串（≤3 位小数）。管理员登录限流为进程内实现（单实例边界），多实例部署时需替换为共享存储。登录事务（用户+微信身份+会话）与默认地址切换（users 行锁串行化 + 部分唯一索引）为已落地的强一致边界。
+API 统一包含 requestId；错误响应包含 code、message、requestId（及原因 details）。客户端不能将本地支付提示当作后端支付事实。金额以整数分表达；数量为十进制字符串（≤3 位小数）。管理员登录限流为进程内实现（单实例边界），多实例部署时需替换为共享存储。已落地的强一致边界：登录事务（用户+微信身份+会话）、默认地址切换（users 行锁 + 部分唯一索引）、下单事务（组行锁重查容量与可完成性 + 尾差判定 + 预占/订单原子提交）、建组整件预留（条件更新 available>0 + business_key 幂等）、并发最后份额恰一人成功。
 
 ## 交易设计保留项
 
