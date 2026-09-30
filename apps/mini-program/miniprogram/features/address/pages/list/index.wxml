@@ -1,0 +1,38 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="state">
+    <text>请先登录后管理收货地址</text>
+    <button bindtap="goLogin" type="button">去登录</button>
+  </view>
+
+  <view wx:elif="{{loading}}" class="state">正在加载地址…</view>
+
+  <view wx:elif="{{error}}" class="state error-state">
+    <text>{{error}}</text>
+    <button bindtap="retry" type="button">重试</button>
+  </view>
+
+  <view wx:elif="{{items.length === 0}}" class="state">
+    <text>暂无收货地址</text>
+    <button bindtap="goCreate" type="button">新增地址</button>
+  </view>
+
+  <block wx:else>
+    <view wx:for="{{items}}" wx:key="id" class="address-card {{item.isDefault ? 'default' : ''}}">
+      <view class="address-main" data-id="{{item.id}}" bindtap="goEdit" hover-class="hover">
+        <view class="line1">
+          <text class="name">{{item.receiverName}}</text>
+          <text class="phone">{{item.phone}}</text>
+          <text wx:if="{{item.isDefault}}" class="default-badge">默认</text>
+        </view>
+        <view class="detail">{{item.province}}{{item.city}}{{item.district}} {{item.detail}}</view>
+      </view>
+      <view class="address-actions">
+        <button size="mini" data-id="{{item.id}}" bindtap="onSetDefault" loading="{{busyId === item.id}}" disabled="{{busyId === item.id || item.isDefault}}">{{item.isDefault ? '默认地址' : '设为默认'}}</button>
+        <button size="mini" data-id="{{item.id}}" bindtap="goEdit">编辑</button>
+        <button size="mini" class="danger" data-id="{{item.id}}" bindtap="onDelete" loading="{{busyId === item.id}}" disabled="{{busyId === item.id}}">删除</button>
+      </view>
+    </view>
+    <view class="count-hint">共 {{items.length}}/20 条</view>
+    <button class="primary-btn" bindtap="goCreate">新增地址</button>
+  </block>
+</view>

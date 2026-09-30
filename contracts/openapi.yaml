@@ -386,12 +386,342 @@ paths:
                   requestId: { type: string }
                   data: { $ref: '#/components/schemas/MiniProductView' }
         '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/auth/login:
+    post:
+      operationId: miniWechatLogin
+      summary: 微信登录（code2Session 服务端校验；凭据未配置返回 503 WECHAT_NOT_CONFIGURED）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        '200':
+          description: 登录成功（isNewUser 标识首次建户）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/MiniLoginResponse' }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '502':
+          description: 微信服务不可用（WECHAT_UNAVAILABLE）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: 微信登录未配置（WECHAT_NOT_CONFIGURED）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/mini/v1/auth/me:
+    get:
+      operationId: getMiniMe
+      security: [{ miniUserAuth: [] }]
+      responses:
+        '200':
+          description: 当前用户（手机号脱敏）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/MiniUserView' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/mini/v1/auth/logout:
+    post:
+      operationId: miniLogout
+      security: [{ miniUserAuth: [] }]
+      summary: 登出（仅撤销当前会话；幂等）
+      responses:
+        '200':
+          description: 已撤销
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [revoked]
+                    properties:
+                      revoked: { type: boolean }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/mini/v1/auth/profile:
+    patch:
+      operationId: updateMiniProfile
+      security: [{ miniUserAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nickname]
+              properties:
+                nickname: { type: string, minLength: 1, maxLength: 30 }
+      responses:
+        '200':
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/MiniUserView' }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/mini/v1/auth/phone:
+    post:
+      operationId: bindMiniPhone
+      security: [{ miniUserAuth: [] }]
+      summary: 绑定手机号（微信手机号组件 code 换取；服务端验证事实）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string, minLength: 1, maxLength: 256 }
+      responses:
+        '200':
+          description: 绑定成功
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [hasPhone, phoneMasked, phoneVerified]
+                    properties:
+                      hasPhone: { type: boolean, enum: [true] }
+                      phoneMasked: { type: string }
+                      phoneVerified: { type: boolean, enum: [true] }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/mini/v1/addresses:
+    get:
+      operationId: listMiniAddresses
+      security: [{ miniUserAuth: [] }]
+      responses:
+        '200':
+          description: 自己的地址（默认在前）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/AddressView' }
+        '401': { $ref: '#/components/responses/Error401' }
+    post:
+      operationId: createMiniAddress
+      security: [{ miniUserAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressSaveRequest' }
+      responses:
+        '201':
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/AddressView' }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '409':
+          description: 超过 20 条上限（ADDRESS_LIMIT_REACHED）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/mini/v1/addresses/{id}:
+    patch:
+      operationId: updateMiniAddress
+      security: [{ miniUserAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddressSaveRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/MiniAddress' }
+        '404': { $ref: '#/components/responses/Error404' }
+    delete:
+      operationId: deleteMiniAddress
+      security: [{ miniUserAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 已删除
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [deleted]
+                    properties:
+                      deleted: { type: boolean }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/addresses/{id}/default:
+    put:
+      operationId: setDefaultMiniAddress
+      security: [{ miniUserAuth: [] }]
+      summary: 设默认（并发唯一；幂等）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 刷新后的地址列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/AddressView' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/users:
+    get:
+      operationId: listAdminUsers
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: keyword, in: query, schema: { type: string, maxLength: 30 } }
+        - { name: status, in: query, schema: { type: string, enum: [active, disabled] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 用户分页（手机号脱敏）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, page, pageSize, total]
+                    properties:
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/AdminUserListItem' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/users/{id}:
+    get:
+      operationId: getAdminUser
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 用户详情（脱敏）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/AdminUserListItem' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/users/{id}/phone:
+    get:
+      operationId: revealAdminUserPhone
+      security: [{ bearerAuth: [] }]
+      summary: 查看完整手机号（强制审计 user.phone_revealed）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 手机号原文（已审计）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [phone, countryCode]
+                    properties:
+                      phone: { type: string }
+                      countryCode: { type: string }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/users/{id}/disable:
+    post:
+      operationId: disableAdminUser
+      security: [{ bearerAuth: [] }]
+      summary: 禁用（撤销全部会话；审计；幂等）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/AdminUser' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/users/{id}/enable:
+    post:
+      operationId: enableAdminUser
+      security: [{ bearerAuth: [] }]
+      summary: 启用（审计；幂等）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/AdminUser' }
+        '404': { $ref: '#/components/responses/Error404' }
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
-      description: 登录返回的会话 token
+      description: 管理员会话 token（admin 域）
+    miniUserAuth:
+      type: http
+      scheme: bearer
+      description: 小程序用户会话 token（user 域，与 admin 不可互用）
   responses:
     Platform:
       description: 公开元数据；已实现上下文为 partial，其余 planned
@@ -458,6 +788,31 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
+    Error403:
+      description: 无权限
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    AdminUser:
+      description: 用户视图（脱敏）
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, requestId]
+            properties:
+              requestId: { type: string }
+              data: { $ref: '#/components/schemas/AdminUserListItem' }
+    MiniAddress:
+      description: 地址视图
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, requestId]
+            properties:
+              requestId: { type: string }
+              data: { $ref: '#/components/schemas/AddressView' }
   schemas:
     PlatformInfo:
       type: object
@@ -693,3 +1048,57 @@ components:
           type: array
           items: { $ref: '#/components/schemas/ShareOptionView' }
         stockStatus: { $ref: '#/components/schemas/ProductStockStatus' }
+    MiniLoginResponse:
+      type: object
+      required: [token, expiresAt, isNewUser, user]
+      properties:
+        token: { type: string }
+        expiresAt: { type: string, format: date-time }
+        isNewUser: { type: boolean }
+        user: { $ref: '#/components/schemas/MiniUserView' }
+    MiniUserView:
+      type: object
+      required: [id, nickname, hasPhone, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        nickname: { type: string, maxLength: 30 }
+        hasPhone: { type: boolean }
+        phoneMasked: { type: string, example: "138****1234" }
+        phoneVerified: { type: boolean }
+        status: { type: string, enum: [active, disabled] }
+        createdAt: { type: string, format: date-time }
+    AddressView:
+      type: object
+      required: [id, receiverName, phone, province, city, district, detail, isDefault, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        receiverName: { type: string, maxLength: 20 }
+        phone: { type: string, description: 本人视图展示原文；后台一律脱敏 }
+        province: { type: string }
+        city: { type: string }
+        district: { type: string }
+        detail: { type: string, maxLength: 120 }
+        isDefault: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AddressSaveRequest:
+      type: object
+      required: [receiverName, phone, province, city, district, detail]
+      properties:
+        receiverName: { type: string, minLength: 1, maxLength: 20 }
+        phone: { type: string, pattern: '^1[3-9][0-9]{9}$' }
+        province: { type: string, minLength: 1, maxLength: 20 }
+        city: { type: string, minLength: 1, maxLength: 20 }
+        district: { type: string, minLength: 1, maxLength: 20 }
+        detail: { type: string, minLength: 5, maxLength: 120 }
+    AdminUserListItem:
+      type: object
+      required: [id, nickname, hasPhone, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        nickname: { type: string }
+        hasPhone: { type: boolean }
+        phoneMasked: { type: string }
+        status: { type: string, enum: [active, disabled] }
+        createdAt: { type: string, format: date-time }
+        lastLoginAt: { type: string, format: date-time }

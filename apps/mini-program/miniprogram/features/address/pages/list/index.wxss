@@ -1,0 +1,16 @@
+/* 地址列表样式。 */
+.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #7b8b85; font-size: 28rpx; text-align: center; }
+.error-state { color: #a74337; }
+.address-card { background: white; border-radius: 16rpx; padding: 26rpx; margin-bottom: 22rpx; display: grid; gap: 18rpx; }
+.address-card.default { border: 1rpx solid #287d68; }
+.address-main { display: grid; gap: 10rpx; }
+.hover { opacity: 0.85; }
+.line1 { display: flex; align-items: center; gap: 14rpx; }
+.name { font-size: 30rpx; font-weight: 600; color: #223247; }
+.phone { color: #54657a; font-size: 26rpx; }
+.default-badge { font-size: 20rpx; color: #356557; background: #eaf3ef; border-radius: 6rpx; padding: 2rpx 10rpx; }
+.detail { color: #7b8b85; font-size: 26rpx; line-height: 1.6; }
+.address-actions { display: flex; gap: 12rpx; justify-content: flex-end; }
+.address-actions .danger { color: #a74337; }
+.count-hint { text-align: center; color: #a5b3ad; font-size: 22rpx; margin: 8rpx 0 20rpx; }
+.primary-btn { background: #287d68; color: white; border-radius: 12rpx; }

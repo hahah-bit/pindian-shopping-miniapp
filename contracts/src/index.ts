@@ -54,7 +54,8 @@ export type AdminPermission =
   | 'catalog:manage'
   | 'inventory:manage'
   | 'media:manage'
-  | 'admin:manage';
+  | 'admin:manage'
+  | 'user:manage';
 
 export interface AdminProfile {
   id: string;
@@ -219,4 +220,74 @@ export interface MiniProductView {
   unit: string;
   shareOptions: ShareOptionView[];
   stockStatus: ProductStockStatus;
+}
+
+// ---------- 小程序用户身份（F009/F010） ----------
+
+export interface MiniUserView {
+  id: string;
+  nickname: string;
+  hasPhone: boolean;
+  phoneMasked?: string;
+  phoneVerified?: boolean;
+  status: 'active' | 'disabled';
+  createdAt: string;
+}
+
+export interface MiniLoginResponse {
+  token: string;
+  expiresAt: string;
+  isNewUser: boolean;
+  user: MiniUserView;
+}
+
+export interface ProfileUpdateRequest {
+  nickname: string;
+}
+
+export interface PhoneBindResult {
+  hasPhone: true;
+  phoneMasked: string;
+  phoneVerified: true;
+}
+
+// ---------- 收货地址（F011） ----------
+
+export interface AddressView {
+  id: string;
+  receiverName: string;
+  phone: string;
+  province: string;
+  city: string;
+  district: string;
+  detail: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AddressSaveRequest {
+  receiverName: string;
+  phone: string;
+  province: string;
+  city: string;
+  district: string;
+  detail: string;
+}
+
+// ---------- 后台用户管理（F012） ----------
+
+export interface AdminUserListItem {
+  id: string;
+  nickname: string;
+  hasPhone: boolean;
+  phoneMasked?: string;
+  status: 'active' | 'disabled';
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
+export interface AdminPhoneReveal {
+  phone: string;
+  countryCode: string;
 }

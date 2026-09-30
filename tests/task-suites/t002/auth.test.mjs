@@ -89,11 +89,13 @@ function seedAdmin(admins, overrides = {}) {
 
 test('角色权限：super_admin 拥有全部权限码，未知角色无权限', () => {
   const permissions = permissionsOfRole('super_admin');
-  assert.deepEqual([...permissions].sort(), ['admin:manage', 'catalog:manage', 'inventory:manage', 'media:manage'].sort());
+  // T003 起新增 user:manage（用户管理）
+  assert.deepEqual([...permissions].sort(), ['admin:manage', 'catalog:manage', 'inventory:manage', 'media:manage', 'user:manage'].sort());
   assert.equal(can('super_admin', 'catalog:manage'), true);
   assert.equal(can('super_admin', 'media:manage'), true);
   assert.equal(can('super_admin', 'inventory:manage'), true);
   assert.equal(can('super_admin', 'admin:manage'), true);
+  assert.equal(can('super_admin', 'user:manage'), true);
 });
 
 test('管理员实体：创建校验用户名与展示名；登录时间记录为不可变更新', () => {

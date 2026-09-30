@@ -58,3 +58,12 @@ button, select { border: 1px solid #d7e1e8; border-radius: 6px; background: whit
 .image-actions button { padding: 3px 7px; font-size: 11px; }
 .form-actions { display: flex; gap: 10px; margin-top: 20px; }
 .form-actions .primary { padding: 10px 22px; }
+
+.detail-panel { background: white; border: 1px solid #e4e9ef; border-radius: 12px; padding: 22px; margin-top: 22px; display: grid; gap: 14px; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; }
+.panel-head h3 { margin: 0; font-size: 16px; }
+.detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 0; }
+.detail-grid dt { font-size: 12px; color: #748297; margin-bottom: 4px; }
+.detail-grid dd { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.revealed { background: #fff7e6; padding: 2px 8px; border-radius: 4px; }
+.panel-actions { display: flex; gap: 10px; }

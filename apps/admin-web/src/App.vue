@@ -7,6 +7,7 @@ import LoginView from './features/admin-auth/LoginView.vue';
 import ProductListView from './features/product-admin/ProductListView.vue';
 import ProductFormView from './features/product-admin/ProductFormView.vue';
 import MediaLibraryView from './features/media/MediaLibraryView.vue';
+import AdminUsersView from './features/admin-users/AdminUsersView.vue';
 import { currentPath, navigate } from './platform/router';
 import { ApiClientError, fetchMe, logout, storedToken, storeToken } from './platform/api-client';
 
@@ -20,6 +21,7 @@ const navigation = [
   { key: 'customer-service', label: '客服工作台', path: '/customer-service' },
   { key: 'after-sales', label: '售后工单', path: '/after-sales' },
   { key: 'reporting', label: '运营看板', path: '/reporting' },
+  { key: 'users', label: '用户管理', path: '/users' },
   { key: 'access', label: '权限与审计', path: '/access' }
 ];
 
@@ -116,6 +118,7 @@ onMounted(restoreSession);
         <ProductFormView v-else-if="currentPath === '/catalog/new'" />
         <ProductFormView v-else-if="productIdFromRoute" :product-id="productIdFromRoute" />
         <MediaLibraryView v-else-if="currentPath === '/media'" />
+        <AdminUsersView v-else-if="currentPath === '/users'" />
         <ModulePlaceholder v-else :title="title" />
       </section>
     </main>

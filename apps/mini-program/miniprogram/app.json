@@ -3,7 +3,9 @@
     "features/catalog/pages/index/index",
     "features/orders/pages/index/index",
     "features/profile/pages/index/index",
-    "features/catalog/pages/detail/index"
+    "features/catalog/pages/detail/index",
+    "features/address/pages/list/index",
+    "features/address/pages/form/index"
   ],
   "window": {
     "navigationBarTitleText": "拼单购物",

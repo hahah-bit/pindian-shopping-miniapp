@@ -9,7 +9,7 @@ import { PlatformController } from '../platform/adapters/inbound/describe-platfo
 import { PostgresProbe } from '../platform/adapters/outbound/postgres/postgres-probe';
 import { SystemClock } from '../shared/kernel';
 import { PostgresTransactionRunner } from '../adapters-shared/transaction-runner';
-import { AdminAuthGuard } from '../contexts/identity-access/adapters/inbound/admin/admin-auth.guard';
+import { AccessGuard } from '../contexts/identity-access/adapters/inbound/admin/access.guard';
 import { AuthController } from '../contexts/identity-access/adapters/inbound/admin/auth.controller';
 import {
   AuthenticateAdmin,
@@ -21,6 +21,35 @@ import {
   type PasswordHasher,
   type SessionRepository
 } from '../contexts/identity-access/application';
+import {
+  AuthenticateUser,
+  BindPhone,
+  CreateAddress,
+  DeleteAddress,
+  ListMyAddresses,
+  LoginWithWechat,
+  LogoutUser,
+  SetDefaultAddress,
+  UpdateAddress,
+  UpdateProfile,
+  type UserSessionRepository,
+  type UserRepository,
+  type WechatIdentityRepository,
+  type UserTokenService,
+  type AddressRepository
+} from '../contexts/identity-access/application/user';
+import {
+  DisableUser,
+  EnableUser,
+  GetAdminUser,
+  ListAdminUsers,
+  RevealUserPhone
+} from '../contexts/identity-access/application/user/admin-users';
+import { PostgresUserRepository, PostgresWechatIdentityRepository, PostgresUserSessionRepository, PostgresAddressRepository } from '../contexts/identity-access/adapters/outbound/postgres/user-repositories';
+import { HttpWxAuthAdapter, HttpWxAccessTokenAdapter, HttpWxPhoneAdapter } from '../contexts/identity-access/adapters/outbound/wechat/wx-http.adapters';
+import { MiniAuthController } from '../contexts/identity-access/adapters/inbound/mini/mini-auth.controller';
+import { MiniProfileController, MiniAddressesController } from '../contexts/identity-access/adapters/inbound/mini/mini-user.controller';
+import { AdminUsersController } from '../contexts/identity-access/adapters/inbound/admin/users.controller';
 import { LoginThrottle } from '../contexts/identity-access/domain/login-throttle';
 import { PostgresAdminRepository } from '../contexts/identity-access/adapters/outbound/postgres/admin-repository';
 import { PostgresSessionRepository } from '../contexts/identity-access/adapters/outbound/postgres/session-repository';
@@ -69,11 +98,16 @@ import { TOKENS } from './injection-tokens';
     MediaAccessController,
     AdminProductsController,
     MiniProductsController,
-    AdminStockController
+    AdminStockController,
+    MiniAuthController,
+    MiniProfileController,
+    MiniAddressesController,
+    AdminUsersController
   ],
   providers: [
     { provide: TOKENS.PgPool, useFactory: () => new Pool({ connectionString: readConfig().databaseUrl, max: 10 }) },
     { provide: TOKENS.Clock, useFactory: () => new SystemClock() },
+    { provide: 'CLOCK', useExisting: TOKENS.Clock },
     // 平台
     { provide: DATABASE_PROBE, useFactory: () => new PostgresProbe(readConfig().databaseUrl) },
     { provide: CheckReadiness, useFactory: (db: DatabaseProbe) => new CheckReadiness(db), inject: [DATABASE_PROBE] },
@@ -93,8 +127,62 @@ import { TOKENS } from './injection-tokens';
     { provide: LogoutAdmin, useFactory: (sessions: SessionRepository, clock) => new LogoutAdmin({ sessions, clock }), inject: [TOKENS.SessionRepository, TOKENS.Clock] },
     { provide: AuthenticateAdmin, useFactory: (admins, sessions, tokens, clock) => new AuthenticateAdmin({ admins, sessions, tokens, clock }), inject: [TOKENS.AdminRepository, TOKENS.SessionRepository, TOKENS.AdminTokenService, TOKENS.Clock] },
     { provide: CreateOrUpdateInitialAdmin, useFactory: (admins, sessions, hasher, clock) => new CreateOrUpdateInitialAdmin({ admins, sessions, hasher, clock }), inject: [TOKENS.AdminRepository, TOKENS.SessionRepository, TOKENS.PasswordHasher, TOKENS.Clock] },
-    { provide: AdminAuthGuard, useFactory: (reflector: Reflector, authenticate: AuthenticateAdmin) => new AdminAuthGuard(reflector, authenticate), inject: [Reflector, AuthenticateAdmin] },
-    { provide: APP_GUARD, useExisting: AdminAuthGuard },
+    { provide: AccessGuard, useFactory: (reflector: Reflector, authenticateAdmin: AuthenticateAdmin, authenticateUser: AuthenticateUser) => new AccessGuard(reflector, authenticateAdmin, authenticateUser), inject: [Reflector, AuthenticateAdmin, AuthenticateUser] },
+    { provide: APP_GUARD, useExisting: AccessGuard },
+    // 用户身份（T003）
+    { provide: 'USER_REPOSITORY', useFactory: (pool: Pool) => new PostgresUserRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'WECHAT_IDENTITY_REPOSITORY', useFactory: (pool: Pool) => new PostgresWechatIdentityRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'USER_SESSION_REPOSITORY', useFactory: (pool: Pool) => new PostgresUserSessionRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'ADDRESS_REPOSITORY', useFactory: (pool: Pool) => new PostgresAddressRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'USER_TOKEN_SERVICE', useFactory: () => new TokenService() },
+    { provide: HttpWxAuthAdapter, useFactory: () => new HttpWxAuthAdapter(readConfig()) },
+    { provide: HttpWxAccessTokenAdapter, useFactory: () => new HttpWxAccessTokenAdapter(readConfig()) },
+    { provide: HttpWxPhoneAdapter, useFactory: (tokens: HttpWxAccessTokenAdapter) => new HttpWxPhoneAdapter(tokens), inject: [HttpWxAccessTokenAdapter] },
+    {
+      provide: LoginWithWechat,
+      useFactory: (users, identities, sessions, tokens, wxAuth, clock, pool: Pool) =>
+        new LoginWithWechat({ users, identities, sessions, tokens, wxAuth, clock, sessionTtlMinutes: readConfig().userSessionTtlMinutes, runner: new PostgresTransactionRunner(pool) }),
+      inject: ['USER_REPOSITORY', 'WECHAT_IDENTITY_REPOSITORY', 'USER_SESSION_REPOSITORY', 'USER_TOKEN_SERVICE', HttpWxAuthAdapter, TOKENS.Clock, TOKENS.PgPool]
+    },
+    { provide: AuthenticateUser, useFactory: (users, sessions, tokens, clock) => new AuthenticateUser({ users, sessions, tokens, clock }), inject: ['USER_REPOSITORY', 'USER_SESSION_REPOSITORY', 'USER_TOKEN_SERVICE', TOKENS.Clock] },
+    { provide: LogoutUser, useFactory: (sessions, clock) => new LogoutUser({ sessions, clock }), inject: ['USER_SESSION_REPOSITORY', TOKENS.Clock] },
+    { provide: BindPhone, useFactory: (users, identities, wxPhone, clock) => new BindPhone({ users, identities, wxPhone, clock }), inject: ['USER_REPOSITORY', 'WECHAT_IDENTITY_REPOSITORY', HttpWxPhoneAdapter, TOKENS.Clock] },
+    { provide: UpdateProfile, useFactory: (users, clock) => new UpdateProfile({ users, clock }), inject: ['USER_REPOSITORY', TOKENS.Clock] },
+    { provide: ListMyAddresses, useFactory: (addresses) => new ListMyAddresses({ addresses }), inject: ['ADDRESS_REPOSITORY'] },
+    { provide: CreateAddress, useFactory: (addresses, clock) => new CreateAddress({ addresses, clock }), inject: ['ADDRESS_REPOSITORY', TOKENS.Clock] },
+    { provide: UpdateAddress, useFactory: (addresses, clock) => new UpdateAddress({ addresses, clock }), inject: ['ADDRESS_REPOSITORY', TOKENS.Clock] },
+    { provide: DeleteAddress, useFactory: (addresses, clock) => new DeleteAddress({ addresses, clock }), inject: ['ADDRESS_REPOSITORY', TOKENS.Clock] },
+    {
+      provide: SetDefaultAddress,
+      useFactory: (addresses, users, pool: Pool) => new SetDefaultAddress({ addresses, users, runner: new PostgresTransactionRunner(pool) }),
+      inject: ['ADDRESS_REPOSITORY', 'USER_REPOSITORY', TOKENS.PgPool]
+    },
+    // 后台用户管理（F012）
+    {
+      provide: ListAdminUsers,
+      useFactory: (users, sessions, audit, clock) => new ListAdminUsers({ users, sessions, audit, clock }),
+      inject: ['USER_REPOSITORY', 'USER_SESSION_REPOSITORY', RecordOperation, TOKENS.Clock]
+    },
+    {
+      provide: GetAdminUser,
+      useFactory: (users, sessions, audit, clock) => new GetAdminUser({ users, sessions, audit, clock }),
+      inject: ['USER_REPOSITORY', 'USER_SESSION_REPOSITORY', RecordOperation, TOKENS.Clock]
+    },
+    {
+      provide: RevealUserPhone,
+      useFactory: (users, sessions, audit, clock) => new RevealUserPhone({ users, sessions, audit, clock }),
+      inject: ['USER_REPOSITORY', 'USER_SESSION_REPOSITORY', RecordOperation, TOKENS.Clock]
+    },
+    {
+      provide: DisableUser,
+      useFactory: (users, sessions, audit, clock) => new DisableUser({ users, sessions, audit, clock }),
+      inject: ['USER_REPOSITORY', 'USER_SESSION_REPOSITORY', RecordOperation, TOKENS.Clock]
+    },
+    {
+      provide: EnableUser,
+      useFactory: (users, sessions, audit, clock) => new EnableUser({ users, sessions, audit, clock }),
+      inject: ['USER_REPOSITORY', 'USER_SESSION_REPOSITORY', RecordOperation, TOKENS.Clock]
+    },
     // 审计
     { provide: TOKENS.OperationLogRepository, useFactory: (pool: Pool) => new PostgresOperationLogRepository(pool), inject: [TOKENS.PgPool] },
     { provide: RecordOperation, useFactory: (repository: OperationLogRepository, clock) => new RecordOperation({ repository, clock }), inject: [TOKENS.OperationLogRepository, TOKENS.Clock] },

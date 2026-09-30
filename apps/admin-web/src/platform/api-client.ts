@@ -1,4 +1,6 @@
 import type {
+  AdminPhoneReveal,
+  AdminUserListItem,
   AdminProductListItem,
   AdminProductView,
   ApiResponse,
@@ -150,6 +152,33 @@ export async function adjustStock(id: string, body: StockAdjustmentRequest): Pro
 
 export async function listStockMovements(id: string, page = 1, pageSize = 10): Promise<PageView<StockMovementView>> {
   return request<PageView<StockMovementView>>(`/api/admin/v1/products/${id}/stock-movements?page=${page}&pageSize=${pageSize}`);
+}
+
+// ---------- 用户管理（F012） ----------
+
+export async function listAdminUsers(query: { keyword?: string; status?: string; page?: number; pageSize?: number } = {}): Promise<PageView<AdminUserListItem>> {
+  const params = new URLSearchParams();
+  if (query.keyword) params.set('keyword', query.keyword);
+  if (query.status) params.set('status', query.status);
+  params.set('page', String(query.page ?? 1));
+  params.set('pageSize', String(query.pageSize ?? 10));
+  return request<PageView<AdminUserListItem>>(`/api/admin/v1/users?${params.toString()}`);
+}
+
+export async function getAdminUser(id: string): Promise<AdminUserListItem> {
+  return request<AdminUserListItem>(`/api/admin/v1/users/${id}`);
+}
+
+export async function revealAdminUserPhone(id: string): Promise<AdminPhoneReveal> {
+  return request<AdminPhoneReveal>(`/api/admin/v1/users/${id}/phone`);
+}
+
+export async function disableAdminUser(id: string): Promise<AdminUserListItem> {
+  return request<AdminUserListItem>(`/api/admin/v1/users/${id}/disable`, { method: 'POST' });
+}
+
+export async function enableAdminUser(id: string): Promise<AdminUserListItem> {
+  return request<AdminUserListItem>(`/api/admin/v1/users/${id}/enable`, { method: 'POST' });
 }
 
 // ---------- 小程序侧核对（后台调试用） ----------

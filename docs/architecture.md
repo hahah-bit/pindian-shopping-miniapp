@@ -47,7 +47,7 @@ flowchart TB
 | ordering | Order、PriceSnapshot、AddressSnapshot | 用户交易与不可变订单快照 |
 | payments | Payment、Refund、Money | 实付、实退和渠道结果 |
 | fulfillment | FulfillmentOrder、Shipment、Quantity | 独立数量分配和发货事实 |
-| identity-access | User、Admin、Role、Address（T002 已实现后台管理员与会话） | 后台身份与会话；用户身份、地址簿属后续任务 |
+| identity-access | User、Admin、Role、Address（T002 后台管理员；T003 用户/微信身份/用户会话/收货地址） | 后台与用户身份、会话、地址簿 |
 | customer-service | Conversation、Message、AgentProfile | 会话、留言与消息记录 |
 | after-sales | Ticket、TicketAction | 售后处理记录 |
 | notifications / audit / reporting | Notification、OperationLog（T002 已实现基础操作日志）、查询投影 | 投递、审计和统计；不改写交易事实 |
@@ -117,7 +117,7 @@ classDiagram
 
 小程序主入口为商品、订单、我的，页面及其组件按 feature 目录存放；业务页面尚未实现时明确显示占位提示。管理后台包含商品库存、拼单订单、财务、履约、客服、售后和看板导航，未实现页面不得伪造可操作的订单或支付数据。
 
-T002 起接入鉴权与业务接口：后台除登录外全部经 `AdminAuthGuard`（默认拒绝、权限码注解），会话为 DB 会话（token 仅登录响应返回一次，库存 sha256 哈希）；图片公开读取仅限商品图片场景，客服图片后续单独定义访问控制。小程序商品页展示真实数据并标注来源；mock 仅用于无后端预览。
+T002 起接入鉴权与业务接口：守卫按认证域分派（admin 默认拒绝 + 权限码；T003 新增 user 域小程序会话），会话为 DB 会话（token 仅登录响应返回一次，库存 sha256 哈希），两类 token 不可互用。微信登录经 `WxAuthPort`/`WxPhonePort` 服务端调用 code2Session 与手机号组件（未配置凭据时显式失败）。图片公开读取仅限商品图片场景，客服图片后续单独定义访问控制。
 
 - `/api/health/live`：进程存活，不包含数据库详情。
 - `/api/health/ready`：实际查询 PostgreSQL，失败返回 503；不泄露连接串。
@@ -125,10 +125,12 @@ T002 起接入鉴权与业务接口：后台除登录外全部经 `AdminAuthGuar
 - `/api/health/openapi`：接口文档（contracts/openapi.yaml，含 T002 全部接口契约）。
 - `/api/admin/v1/auth|media|products|…`：后台接口，Bearer 认证 + 权限码。
 - `/api/mini/v1/products`：公开商品接口（仅上架商品）。
+- `/api/mini/v1/auth|addresses`：小程序用户登录、资料、手机号与地址接口（user 域 Bearer）。
+- `/api/admin/v1/users`：后台用户管理（user:manage 权限；脱敏 + 敏感查看审计）。
 - `/api/media/v1/assets/{id}`：公开图片读取（仅 ready 资源，长缓存）。
 - 后续微信回调与客服 WebSocket 接口另行设计，当前不提供假回调或假聊天接口。
 
-API 统一包含 requestId；错误响应包含 code、message、requestId（及原因 details）。客户端不能将本地支付提示当作后端支付事实。金额以整数分表达；数量为十进制字符串（≤3 位小数）。登录限流为进程内实现（单实例边界），多实例部署时需替换为共享存储。
+API 统一包含 requestId；错误响应包含 code、message、requestId（及原因 details）。客户端不能将本地支付提示当作后端支付事实。金额以整数分表达；数量为十进制字符串（≤3 位小数）。管理员登录限流为进程内实现（单实例边界），多实例部署时需替换为共享存储。登录事务（用户+微信身份+会话）与默认地址切换（users 行锁串行化 + 部分唯一索引）为已落地的强一致边界。
 
 ## 交易设计保留项
 

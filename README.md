@@ -2,7 +2,7 @@
 
 原生微信小程序 + Vue 3 管理后台 + NestJS/TypeScript 模块化后端，采用 DDD 和六边形架构。
 
-当前阶段是 **T002 商品展示、后台商品管理与图片管理（已完成）**：管理员登录、图片上传（本地卷存储）、商品创建/上下架、整件库存留痕调整、小程序商品列表与详情均已接入真实后端。拼单交易、下单、微信支付、退款、履约、客服和工单尚未实现。用户量预计不超过 1000 不等于吞吐量承诺；交易任务仍须包含事务、容量约束和幂等。
+当前阶段是 **T003 用户身份、收货地址与后台用户管理（已完成，本地与集成层）**：小程序微信登录（code2Session 服务端校验）、用户会话、昵称/手机号绑定、收货地址管理、后台用户查询（脱敏+审计）已接入真实后端；T002 商品/图片/库存能力保持可用。拼单交易、下单、微信支付、退款、履约、客服和工单尚未实现。**真实微信凭据缺失：登录接口在未配置时返回明确的“未配置”错误，不伪造成功。**用户量预计不超过 1000 不等于吞吐量承诺；交易任务仍须包含事务、容量约束和幂等。
 
 ## 文档入口
 
@@ -10,7 +10,8 @@
 - [整体架构与候选领域模型](docs/architecture.md)
 - [原始业务需求快照](docs/requirements/pindian-shopping-mini-program-requirements.md)
 - [T001 spec](docs/tasks/T001-platform-foundation/spec.md) · [验收](docs/tasks/T001-platform-foundation/verification.md)
-- [T002 spec](docs/tasks/T002-catalog-admin-media/spec.md) · [计划](docs/tasks/T002-catalog-admin-media/plan.md) · [验收](docs/tasks/T002-catalog-admin-media/verification.md)
+- [T002 spec](docs/tasks/T002-catalog-admin-media/spec.md) · [验收](docs/tasks/T002-catalog-admin-media/verification.md)
+- [T003 spec](docs/tasks/T003-user-identity-address/spec.md) · [验收](docs/tasks/T003-user-identity-address/verification.md)
 - [接口契约](contracts/openapi.yaml)
 
 ## Docker 启动
@@ -83,7 +84,7 @@ API：`npm run dev:api` 读取根 .env，启动并监听编译产物变化。编
 
 后台：另一个终端执行 `npm run dev:admin`，访问 http://localhost:5173。Vite 的 `/api` 代理默认指向 127.0.0.1:3000；如修改 API_PORT，同时设置 API_PROXY_TARGET。Docker API 已占用相同端口时，先停 API/Worker/admin 或使用另一个 API 端口，不关闭其他项目服务。
 
-后台概览页默认使用真实框架 API，选择框可显式切换 Mock；商品、库存、图片页直接对接真实后端。接口失败会显示错误，不自动伪装成 Mock 成功。
+后台概览页默认使用真实框架 API，选择框可显式切换 Mock；商品、库存、图片、用户管理页直接对接真实后端（用户手机号默认脱敏，查看完整号与禁用/启用均记录审计）。接口失败会显示错误，不自动伪装成 Mock 成功。
 
 ## 原生小程序
 
@@ -102,13 +103,14 @@ API：`npm run dev:api` 读取根 .env，启动并监听编译产物变化。编
 ```powershell
 npm run test:task:t001
 npm run test:task:t002
+npm run test:task:t003
 npm run smoke:docker
 npm test
 ```
 
 先通过各任务专项和实际 Docker 冒烟，再运行全量。全量入口包含所有 workspaces 类型检查、构建、源码依赖方向检查，以及 tests 下所有测试。T002 的领域规则（金额、份额、库存、权限）采用 TDD；需要 PostgreSQL 的集成测试在数据库不可达时明确 skip，不计为通过。
 
-小程序 `platform/config.ts` 默认 mode:'api'、baseUrl 指向本地 API；开发者工具联调需配置网络校验，真机需 HTTPS 域名与合法域名配置。
+小程序 `platform/config.ts` 默认 mode:'api'、baseUrl 指向本地 API；“我的”页支持微信登录（需在 .env 配置 WX_APPID/WX_APP_SECRET，留空时返回未配置错误）、地址管理与昵称/手机号绑定。开发者工具联调需配置网络校验，真机需 HTTPS 域名与合法域名配置。
 
 ## 目录与边界
 

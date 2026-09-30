@@ -1,1 +1,28 @@
-/* 共用 app.wxss。 */
+/* 我的页样式。 */
+.source-banner { background: #fff7e6; color: #a06724; font-size: 22rpx; padding: 12rpx 24rpx; border-radius: 8rpx; margin-bottom: 20rpx; }
+.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #7b8b85; font-size: 28rpx; text-align: center; }
+.error-state { color: #a74337; }
+.card { background: white; border-radius: 16rpx; padding: 28rpx; margin-bottom: 24rpx; }
+.login-card { display: grid; gap: 20rpx; justify-items: center; text-align: center; }
+.title { font-size: 32rpx; font-weight: 700; color: #223247; }
+.subtitle { color: #7b8b85; font-size: 24rpx; line-height: 1.7; }
+.primary-btn { background: #287d68; color: white; border-radius: 12rpx; width: 80%; }
+.error-text { color: #a74337; font-size: 24rpx; margin-top: 12rpx; }
+.profile-row { display: flex; gap: 24rpx; align-items: flex-start; }
+.avatar-placeholder { width: 100rpx; height: 100rpx; border-radius: 50%; background: #287d68; color: white; display: grid; place-items: center; font-size: 40rpx; flex-shrink: 0; }
+.profile-main { flex: 1; display: grid; gap: 12rpx; }
+.nickname { font-size: 32rpx; font-weight: 700; color: #223247; }
+.edit-hint { font-size: 20rpx; color: #a5b3ad; font-weight: 400; }
+.nickname-edit { display: flex; gap: 10rpx; align-items: center; }
+.nickname-edit input { border: 1rpx solid #d7e1e8; border-radius: 8rpx; padding: 8rpx 14rpx; font-size: 26rpx; flex: 1; }
+.meta-row { display: flex; }
+.meta { color: #a5b3ad; font-size: 22rpx; }
+.phone-badge { font-size: 22rpx; border-radius: 6rpx; padding: 4rpx 12rpx; }
+.phone-badge.bound { color: #356557; background: #eaf3ef; }
+.phone-badge.unbound { color: #a06724; background: #fdf1e3; }
+.action-card { display: flex; justify-content: space-between; align-items: center; font-size: 28rpx; color: #223247; }
+.action-disabled { display: grid; gap: 6rpx; }
+.hover { opacity: 0.85; }
+.arrow { color: #c3cfdb; }
+.danger-text { color: #a74337; }
+.phone-btn { background: #287d68; color: white; border-radius: 12rpx; margin-bottom: 24rpx; }

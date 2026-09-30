@@ -26,6 +26,7 @@
     "docker:down": "docker compose down",
     "migrate": "node --env-file-if-exists=.env backend/dist/bootstrap/migrate.js",
     "admin:init": "node --env-file-if-exists=.env backend/dist/bootstrap/create-admin.js",
-    "test:task:t002": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t002"
+    "test:task:t002": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t002",
+    "test:task:t003": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t003"
   }
 }

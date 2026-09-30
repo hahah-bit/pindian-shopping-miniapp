@@ -5,6 +5,9 @@ export interface RuntimeConfig {
   mediaDir: string;
   publicApiBaseUrl: string;
   adminSessionTtlMinutes: number;
+  userSessionTtlMinutes: number;
+  wxAppid: string | null;
+  wxAppSecret: string | null;
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
@@ -42,6 +45,9 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig 
     corsOrigins,
     mediaDir: env.MEDIA_DIR ?? 'data/media',
     publicApiBaseUrl,
-    adminSessionTtlMinutes: parsePositiveInt(env.ADMIN_SESSION_TTL_MINUTES, 720)
+    adminSessionTtlMinutes: parsePositiveInt(env.ADMIN_SESSION_TTL_MINUTES, 720),
+    userSessionTtlMinutes: parsePositiveInt(env.USER_SESSION_TTL_MINUTES, 20160),
+    wxAppid: env.WX_APPID?.trim() || null,
+    wxAppSecret: env.WX_APP_SECRET?.trim() || null
   };
 }

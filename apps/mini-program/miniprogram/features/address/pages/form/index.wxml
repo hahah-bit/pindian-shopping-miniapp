@@ -1,0 +1,30 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="state">正在加载地址…</view>
+  <view wx:elif="{{error && !saving}}" class="state error-state">
+    <text>{{error}}</text>
+  </view>
+  <block wx:else>
+    <view class="card">
+      <label class="field">
+        <text>收货人</text>
+        <input value="{{form.receiverName}}" data-field="receiverName" bindinput="onInput" maxlength="20" placeholder="1-20 个字符" />
+      </label>
+      <label class="field">
+        <text>手机号</text>
+        <input value="{{form.phone}}" data-field="phone" bindinput="onInput" type="number" maxlength="11" placeholder="11 位大陆手机号" />
+      </label>
+      <label class="field">
+        <text>所在地区</text>
+        <picker mode="region" value="{{region}}" bindchange="onRegionChange">
+          <view class="region-value">{{region[0]}} {{region[1]}} {{region[2]}} ▾</view>
+        </picker>
+      </label>
+      <label class="field">
+        <text>详细地址</text>
+        <textarea value="{{form.detail}}" data-field="detail" bindinput="onInput" maxlength="120" placeholder="街道、门牌号等（5-120 字符）" auto-height />
+      </label>
+    </view>
+    <view wx:if="{{error}}" class="error-text">{{error}}</view>
+    <button class="primary-btn" bindtap="save" loading="{{saving}}" disabled="{{saving}}">{{isEdit ? '保存修改' : '新增地址'}}</button>
+  </block>
+</view>

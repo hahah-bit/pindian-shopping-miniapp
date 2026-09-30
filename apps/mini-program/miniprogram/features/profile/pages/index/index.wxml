@@ -1,1 +1,58 @@
-<view class="page"><view class="card"><view class="badge">框架预览 · 尚未登录</view><view class="title">个人中心</view><view class="subtitle">微信登录、手机号、收货地址、客服和用户协议入口将在对应功能完成后接入。</view></view><view class="card"><view class="section-title">开发说明</view><view class="subtitle">本轮只搭建平台框架，不包含真实支付或个人信息。touristappid 仅用于无身份能力的预览。</view></view></view>
+<view class="page">
+  <view wx:if="{{isMock}}" class="source-banner">Mock 数据预览（platform/config.ts 可切换 api）</view>
+
+  <view wx:if="{{loading}}" class="state">正在加载…</view>
+
+  <view wx:elif="{{error && !user}}" class="state error-state">
+    <text>{{error}}</text>
+    <button bindtap="retry" type="button">重试</button>
+  </view>
+
+  <view wx:elif="{{!user}}" class="card login-card">
+    <view class="title">登录拼单购物</view>
+    <view class="subtitle">登录后可管理收货地址与个人资料。浏览商品无需登录。</view>
+    <button class="primary-btn" bindtap="login" loading="{{loggingIn}}" disabled="{{loggingIn}}">微信一键登录</button>
+    <view wx:if="{{error}}" class="error-text">{{error}}</view>
+  </view>
+
+  <block wx:else>
+    <view class="card">
+      <view class="profile-row">
+        <view class="avatar-placeholder">{{user.nickname[0]}}</view>
+        <view class="profile-main">
+          <block wx:if="{{!editingNickname}}">
+            <view class="nickname" bindtap="startEditNickname">{{user.nickname}} <text class="edit-hint">改昵称</text></view>
+          </block>
+          <block wx:else>
+            <view class="nickname-edit">
+              <input value="{{nicknameInput}}" bindinput="onNicknameInput" maxlength="30" placeholder="1-30 个字符" />
+              <button size="mini" bindtap="saveNickname" loading="{{savingNickname}}" disabled="{{savingNickname}}">保存</button>
+              <button size="mini" bindtap="cancelEditNickname">取消</button>
+            </view>
+          </block>
+          <view class="meta-row">
+            <text class="phone-badge {{user.hasPhone ? 'bound' : 'unbound'}}">{{user.hasPhone ? (user.phoneMasked + ' 已验证') : '未绑定手机号'}}</text>
+          </view>
+          <view class="meta-row"><text class="meta">注册于 {{user.createdAt}}</text></view>
+        </view>
+      </view>
+      <view wx:if="{{error}}" class="error-text">{{error}}</view>
+    </view>
+
+    <view class="card action-card" hover-class="hover" bindtap="openAddresses">
+      <text>收货地址</text><text class="arrow">›</text>
+    </view>
+
+    <view wx:if="{{user.hasPhone}}" class="card action-card">
+      <view class="action-disabled">
+        <text>手机号已绑定</text>
+        <text class="meta">换绑请重新授权（组件按次计费）</text>
+      </view>
+    </view>
+    <button wx:else class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber" loading="{{bindingPhone}}" disabled="{{bindingPhone}}">绑定手机号</button>
+
+    <view class="card action-card" hover-class="hover" bindtap="signOut">
+      <text class="danger-text">退出登录</text><text class="arrow">›</text>
+    </view>
+  </block>
+</view>
