@@ -253,7 +253,7 @@ test('下单：无候选组 → 建组（库存预留）+ 首单标准价', asyn
   assert.equal(view.reservationExpiresAt.toISOString(), new Date(NOW.getTime() + TTL * 60_000).toISOString());
 });
 
-test('下单：加入已有组选最接近拼满者（G3）；最后单补差（G4/G10）', async () => {
+test('下单：加入已有组选可行组（G3）；补差仅在前面全部已生效时适用（D001 修订）', async () => {
   // 组1：paid 20（剩 40，最早）；组2：paid 30（剩 30，更接近拼满）
   const g1 = Group.create({ groupId: GROUP_1, productId: PRODUCT, snapshot: SNAPSHOT, deadline: new Date(NOW.getTime() + 3600_000), now: NOW }).withReservedUnits(20).withPaidUnits(20, NOW);
   const g2 = Group.create({ groupId: 'eeeeeeee-5555-4555-8555-555555555556', productId: PRODUCT, snapshot: SNAPSHOT, deadline: new Date(NOW.getTime() + 3600_000), now: new Date(NOW.getTime() - 1000) }).withReservedUnits(30).withPaidUnits(30, NOW);
