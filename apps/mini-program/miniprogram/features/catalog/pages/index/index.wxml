@@ -1,0 +1,49 @@
+<view class="page">
+  <view wx:if="{{isMock}}" class="source-banner">Mock 数据预览（platform/config.ts 可切换 api）</view>
+
+  <view wx:if="{{loading}}" class="state">正在加载在售商品…</view>
+
+  <view wx:elif="{{error}}" class="state error-state">
+    <text>{{error}}</text>
+    <button bindtap="retry" type="button">重试</button>
+  </view>
+
+  <view wx:elif="{{items.length === 0}}" class="state">
+    <text>暂无在售商品</text>
+    <text class="state-sub">商家上架后将在这里展示</text>
+    <button bindtap="retry" type="button">刷新</button>
+  </view>
+
+  <block wx:else>
+    <view
+      wx:for="{{items}}"
+      wx:key="id"
+      class="product-card"
+      data-id="{{item.id}}"
+      bindtap="openDetail"
+      hover-class="card-hover"
+    >
+      <view class="image-wrap">
+        <image
+          class="product-image {{item.imageFailed ? 'image-failed' : ''}}"
+          src="{{item.mainImageUrl}}"
+          mode="aspectFill"
+          lazy-load="{{true}}"
+          data-index="{{index}}"
+          binderror="onImageError"
+        />
+        <view wx:if="{{item.imageFailed}}" class="image-placeholder">图片加载失败</view>
+      </view>
+      <view class="product-info">
+        <text class="product-name">{{item.name}}</text>
+        <view class="price-row">
+          <text class="price-from">¥{{item.fromPriceText}}/份 起</text>
+          <text class="price-whole">整件 ¥{{item.wholePriceText}}</text>
+        </view>
+        <text class="stock {{item.soldOut ? 'sold-out' : ''}}">{{item.soldOut ? '已售罄' : '有货'}}</text>
+      </view>
+    </view>
+    <view wx:if="{{loadingMore}}" class="state-sub load-more">正在加载更多…</view>
+    <view wx:elif="{{!hasMore}}" class="state-sub load-more">没有更多了</view>
+  </block>
+</view>

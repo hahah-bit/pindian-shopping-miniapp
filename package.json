@@ -1,0 +1,31 @@
+{
+  "name": "pindian-platform",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "workspaces": [
+    "contracts",
+    "backend",
+    "apps/admin-web",
+    "apps/mini-program"
+  ],
+  "scripts": {
+    "build": "npm run build -w @pindian/contracts && npm run build -w @pindian/backend && npm run build -w @pindian/admin-web && npm run typecheck -w @pindian/mini-program",
+    "typecheck": "npm run build -w @pindian/contracts && npm run typecheck --workspaces --if-present",
+    "dev:api": "npm run dev -w @pindian/backend",
+    "watch:api": "npm run watch -w @pindian/backend",
+    "dev:admin": "npm run dev -w @pindian/admin-web",
+    "check:architecture": "node scripts/check-architecture.mjs",
+    "test:task:t001": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t001",
+    "test": "npm run typecheck && npm run build && npm run check:architecture && node scripts/run-all-tests.mjs",
+    "smoke:docker": "node scripts/smoke-docker.mjs",
+    "env:init": "node scripts/init-env.mjs",
+    "docker:up": "docker compose up -d --build --wait --wait-timeout 180",
+    "docker:down": "docker compose down",
+    "migrate": "node --env-file-if-exists=.env backend/dist/bootstrap/migrate.js",
+    "admin:init": "node --env-file-if-exists=.env backend/dist/bootstrap/create-admin.js",
+    "test:task:t002": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t002"
+  }
+}

@@ -1,0 +1,20 @@
+/* 商品列表页样式（共用 app.wxss 基础）。 */
+.source-banner { background: #fff7e6; color: #a06724; font-size: 22rpx; padding: 12rpx 24rpx; border-radius: 8rpx; margin-bottom: 20rpx; }
+.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #7b8b85; font-size: 28rpx; text-align: center; }
+.error-state { color: #a74337; }
+.state-sub { color: #a5b3ad; font-size: 24rpx; }
+.state button { margin-top: 10rpx; font-size: 26rpx; }
+.product-card { background: white; border-radius: 16rpx; overflow: hidden; margin-bottom: 24rpx; }
+.card-hover { opacity: 0.88; }
+.image-wrap { position: relative; }
+.product-image { width: 100%; height: 360rpx; display: block; background: #eef2f0; }
+.image-failed { visibility: hidden; }
+.image-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: #a5b3ad; font-size: 24rpx; background: #eef2f0; }
+.product-info { padding: 22rpx 26rpx 26rpx; display: grid; gap: 12rpx; }
+.product-name { font-size: 30rpx; font-weight: 600; color: #223247; }
+.price-row { display: flex; align-items: baseline; gap: 18rpx; }
+.price-from { color: #d0563f; font-size: 32rpx; font-weight: 700; }
+.price-whole { color: #7b8b85; font-size: 24rpx; }
+.stock { justify-self: start; font-size: 22rpx; color: #356557; background: #eaf3ef; border-radius: 6rpx; padding: 4rpx 12rpx; }
+.stock.sold-out { color: #a06724; background: #fdf1e3; }
+.load-more { text-align: center; padding: 24rpx 0 40rpx; }

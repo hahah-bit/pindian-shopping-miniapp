@@ -1,0 +1,65 @@
+<view class="page detail-page">
+  <view wx:if="{{isMock}}" class="source-banner">Mock 数据预览（platform/config.ts 可切换 api）</view>
+
+  <view wx:if="{{loading}}" class="state">正在加载商品…</view>
+
+  <view wx:elif="{{notFound}}" class="state">
+    <text>商品已下架或不存在</text>
+    <button bindtap="retry" type="button">刷新重试</button>
+  </view>
+
+  <view wx:elif="{{error}}" class="state error-state">
+    <text>{{error}}</text>
+    <button bindtap="retry" type="button">重试</button>
+  </view>
+
+  <block wx:else>
+    <swiper wx:if="{{gallery.length}}" class="gallery" indicator-dots="{{gallery.length > 1}}" circular="{{gallery.length > 1}}">
+      <swiper-item wx:for="{{gallery}}" wx:key="url">
+        <view class="gallery-slide">
+          <image
+            class="gallery-image {{item.failed ? 'image-failed' : ''}}"
+            src="{{item.url}}"
+            mode="aspectFill"
+            data-index="{{index}}"
+            binderror="onImageError"
+            bindtap="previewImage"
+            data-index="{{index}}"
+          />
+          <view wx:if="{{item.failed}}" class="image-placeholder">图片加载失败</view>
+        </view>
+      </swiper-item>
+    </swiper>
+    <view wx:else class="gallery-empty">暂无商品图片</view>
+
+    <view class="card">
+      <view class="title-row">
+        <text class="name">{{name}}</text>
+        <text class="stock {{soldOut ? 'sold-out' : ''}}">{{soldOut ? '已售罄' : '有货'}}</text>
+      </view>
+      <view class="price-block">
+        <view class="price-line"><text class="price-main">整件参考价 ¥{{wholePriceText}}</text><text class="price-note">含 5 元服务费</text></view>
+        <view class="price-line"><text class="price-from">¥{{fromPriceText}}/份 起</text><text class="price-note">整件 {{quantitySummary}}</text></view>
+      </view>
+      <text wx:if="{{description}}" class="description">{{description}}</text>
+    </view>
+
+    <view class="card">
+      <view class="section-title">可拼份额（参考）</view>
+      <view wx:for="{{shareOptions}}" wx:key="units" class="share-row">
+        <text class="share-label">{{item.fractionLabel}}</text>
+        <text class="share-quantity">{{item.quantityText}} {{unit}}</text>
+        <text class="share-price">¥{{item.priceText}}</text>
+      </view>
+      <view class="hint">参考价按份额均摊四舍五入到分，仅用于展示；拼单开放后以下单时实际报价为准。</view>
+    </view>
+
+    <view class="card">
+      <view class="section-title">商品介绍</view>
+      <text wx:if="{{description}}" class="description">{{description}}</text>
+      <text wx:else class="hint">商家暂未填写详细介绍。</text>
+    </view>
+
+    <view class="footer-note">拼单购买暂未开放，敬请期待</view>
+  </block>
+</view>

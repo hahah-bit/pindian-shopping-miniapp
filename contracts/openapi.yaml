@@ -1,0 +1,695 @@
+openapi: 3.0.3
+info:
+  title: 拼单平台接口
+  version: 0.2.0
+  description: |
+    T001：框架元数据与健康检查。
+    T002：后台身份权限、商品图片、商品库存管理、小程序商品展示。
+    金额一律整数分；数量为十进制字符串（≤3 位小数）；时间 ISO 8601 UTC；
+    分页 page 从 1 起，pageSize 默认 10、上限 50；响应包络 {data, requestId}，错误 {code, message, requestId, details?}。
+servers:
+  - url: http://127.0.0.1:3000
+    description: 本地联调
+paths:
+  /api/health/live:
+    get:
+      operationId: getLiveness
+      responses:
+        '200':
+          description: 进程存活，与数据库状态无关
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+  /api/health/ready:
+    get:
+      operationId: getReadiness
+      responses:
+        '200':
+          description: 实际 PostgreSQL 查询成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthResponse' }
+        '503':
+          description: 数据库不可达或超时
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/health/openapi:
+    get:
+      operationId: getFrameworkContract
+      responses:
+        '200':
+          description: 本文档 YAML
+          content:
+            application/yaml:
+              schema: { type: string }
+  /api/mini/v1/platform:
+    get:
+      operationId: getMiniPlatform
+      responses:
+        '200': { $ref: '#/components/responses/Platform' }
+  /api/admin/v1/platform:
+    get:
+      operationId: getAdminPlatform
+      responses:
+        '200': { $ref: '#/components/responses/Platform' }
+  /api/admin/v1/auth/login:
+    post:
+      operationId: loginAdmin
+      summary: 管理员登录（失败统一话术；限流 429）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, maxLength: 128 }
+                password: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: 登录成功；token 仅本次返回
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/LoginResponse' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '429': { $ref: '#/components/responses/Error429' }
+  /api/admin/v1/auth/logout:
+    post:
+      operationId: logoutAdmin
+      security: [{ bearerAuth: [] }]
+      summary: 登出（幂等）
+      responses:
+        '200':
+          description: 会话已撤销
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [revoked]
+                    properties:
+                      revoked: { type: boolean }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/admin/v1/auth/me:
+    get:
+      operationId: getAdminMe
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: 当前管理员资料
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/AdminProfile' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/admin/v1/media:
+    post:
+      operationId: uploadMediaAsset
+      security: [{ bearerAuth: [] }]
+      summary: 上传商品图片（multipart 字段 file；≤5MiB；JPEG/PNG/WebP；服务端校验魔数与尺寸）
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '201':
+          description: 资源已就绪
+          content:
+            application/json:
+              schema: { $ref: '#/components/responses/MediaAsset' }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '413': { $ref: '#/components/responses/Error413' }
+        '415': { $ref: '#/components/responses/Error415' }
+    get:
+      operationId: listMediaAssets
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 图片库分页（含商品引用计数）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, page, pageSize, total]
+                    properties:
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/MediaAssetAdminView' }
+  /api/admin/v1/media/{id}:
+    delete:
+      operationId: deleteMediaAsset
+      security: [{ bearerAuth: [] }]
+      summary: 删除未被引用的图片资源（被引用返回 409）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 已删除
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [deleted]
+                    properties:
+                      deleted: { type: boolean }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/media/v1/assets/{id}:
+    get:
+      operationId: readMediaAsset
+      summary: 公开读取图片（仅 ready 资源；长缓存）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 图片二进制
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/products:
+    get:
+      operationId: listAdminProducts
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [draft, on_shelf, off_shelf] } }
+        - { name: keyword, in: query, schema: { type: string, minLength: 1, maxLength: 60 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 商品分页
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, page, pageSize, total]
+                    properties:
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/AdminProductListItem' }
+    post:
+      operationId: createProduct
+      security: [{ bearerAuth: [] }]
+      summary: 创建草稿商品（与初始库存同一事务）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProductRequest' }
+      responses:
+        '201':
+          description: 已创建草稿
+          content:
+            application/json:
+              schema: { $ref: '#/components/responses/AdminProduct' }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/admin/v1/products/{id}:
+    get:
+      operationId: getAdminProduct
+      security: [{ bearerAuth: [] }]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/AdminProduct' }
+        '404': { $ref: '#/components/responses/Error404' }
+    patch:
+      operationId: updateProduct
+      security: [{ bearerAuth: [] }]
+      summary: 编辑商品（字段与图片关联全量替换）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProductRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/AdminProduct' }
+        '400': { $ref: '#/components/responses/Error400' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/products/{id}/publish:
+    post:
+      operationId: publishProduct
+      security: [{ bearerAuth: [] }]
+      summary: 上架（条件不满足返回 409 与原因清单；已上架幂等）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/AdminProduct' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/admin/v1/products/{id}/unpublish:
+    post:
+      operationId: unpublishProduct
+      security: [{ bearerAuth: [] }]
+      summary: 下架（幂等）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { $ref: '#/components/responses/AdminProduct' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/products/{id}/stock-adjustments:
+    post:
+      operationId: adjustStock
+      security: [{ bearerAuth: [] }]
+      summary: 库存调整（delta 或 setTo 二选一 + 原因；requestId 幂等键可选；负余额 409）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StockAdjustmentRequest' }
+      responses:
+        '200':
+          description: 调整结果或幂等重放
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/StockAdjustmentResult' }
+        '400': { $ref: '#/components/responses/Error400' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/admin/v1/products/{id}/stock-movements:
+    get:
+      operationId: listStockMovements
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 变动历史分页
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, page, pageSize, total]
+                    properties:
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/StockMovementView' }
+  /api/mini/v1/products:
+    get:
+      operationId: listMiniProducts
+      summary: 小程序商品列表（仅上架；无鉴权）
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 上架商品分页
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, page, pageSize, total]
+                    properties:
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/MiniProductListItem' }
+  /api/mini/v1/products/{id}:
+    get:
+      operationId: getMiniProduct
+      summary: 小程序商品详情（非上架 404）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 商品详情
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/MiniProductView' }
+        '404': { $ref: '#/components/responses/Error404' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 登录返回的会话 token
+  responses:
+    Platform:
+      description: 公开元数据；已实现上下文为 partial，其余 planned
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, requestId]
+            properties:
+              requestId: { type: string }
+              data: { $ref: '#/components/schemas/PlatformInfo' }
+    AdminProduct:
+      description: 商品详情（后台）
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, requestId]
+            properties:
+              requestId: { type: string }
+              data: { $ref: '#/components/schemas/AdminProductView' }
+    MediaAsset:
+      description: 图片资源
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data, requestId]
+            properties:
+              requestId: { type: string }
+              data: { $ref: '#/components/schemas/MediaAssetView' }
+    Error400:
+      description: 参数校验失败
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Error401:
+      description: 未认证
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Error404:
+      description: 资源不存在
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Error409:
+      description: 状态冲突 / 不可上架（details 为原因清单）/ 图片被引用
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Error413:
+      description: 文件超过大小限制
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Error415:
+      description: 格式不支持或不可解码
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Error429:
+      description: 尝试过于频繁
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    PlatformInfo:
+      type: object
+      required: [name, stage, backend, database, contexts, businessReady]
+      properties:
+        name: { type: string }
+        stage: { type: string, enum: [foundation] }
+        backend: { type: string, enum: [NestJS / TypeScript] }
+        database: { type: string, enum: [PostgreSQL] }
+        businessReady: { type: boolean, enum: [false] }
+        contexts:
+          type: array
+          items:
+            type: object
+            required: [key, name, description, status]
+            properties:
+              key: { type: string }
+              name: { type: string }
+              description: { type: string }
+              status: { type: string, enum: [planned, partial] }
+    HealthResponse:
+      type: object
+      required: [data, requestId]
+      properties:
+        requestId: { type: string }
+        data:
+          type: object
+          required: [status, checkedAt]
+          properties:
+            status: { type: string, enum: [live, ready] }
+            checkedAt: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+        details:
+          type: array
+          items: { type: string }
+    AdminProfile:
+      type: object
+      required: [id, username, displayName, role, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        displayName: { type: string }
+        role: { type: string, enum: [super_admin] }
+        permissions:
+          type: array
+          items: { type: string, enum: [catalog:manage, inventory:manage, media:manage, admin:manage] }
+    LoginResponse:
+      type: object
+      required: [token, expiresAt, admin]
+      properties:
+        token: { type: string }
+        expiresAt: { type: string, format: date-time }
+        admin: { $ref: '#/components/schemas/AdminProfile' }
+    MediaFormat:
+      type: string
+      enum: [jpeg, png, webp]
+    MediaAssetView:
+      type: object
+      required: [id, url, format, width, height, sizeBytes, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string }
+        format: { $ref: '#/components/schemas/MediaFormat' }
+        width: { type: integer }
+        height: { type: integer }
+        sizeBytes: { type: integer }
+        createdAt: { type: string, format: date-time }
+    MediaAssetAdminView:
+      allOf:
+        - $ref: '#/components/schemas/MediaAssetView'
+        - type: object
+          required: [referencedByProducts]
+          properties:
+            referencedByProducts: { type: integer }
+    ShareUnits:
+      type: integer
+      enum: [30, 20, 15, 12]
+      description: 60 单位制份额（1/2=30、1/3=20、1/4=15、1/5=12）
+    ShareOptionView:
+      type: object
+      required: [units, fractionLabel, quantityText, referencePriceFen]
+      properties:
+        units: { $ref: '#/components/schemas/ShareUnits' }
+        fractionLabel: { type: string, example: "1/3" }
+        quantityText: { type: string, example: "3.333", description: 展示舍入 ≤3 位小数，非履约规则 }
+        referencePriceFen: { type: integer, description: 参考价（half-up 到分），非支付报价 }
+    ProductStatus:
+      type: string
+      enum: [draft, on_shelf, off_shelf]
+    ProductStockStatus:
+      type: string
+      enum: [available, sold_out]
+    ProductImageView:
+      type: object
+      required: [mediaId, url, role, sortOrder]
+      properties:
+        mediaId: { type: string, format: uuid }
+        url: { type: string }
+        role: { type: string, enum: [main, detail] }
+        sortOrder: { type: integer }
+    AdminProductView:
+      type: object
+      required: [id, name, description, originalPriceFen, userWholePriceFen, wholeQuantity, unit, allowedShareUnits, shareOptions, status, stockStatus, availableWholeItems, detailImages, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        originalPriceFen: { type: integer, description: 整件商品原价（分） }
+        userWholePriceFen: { type: integer, description: 用户端整件参考售价 = 原价 + 500 分固定服务费 }
+        wholeQuantity: { type: string, description: 整件数量，≤3 位小数 }
+        unit: { type: string }
+        allowedShareUnits:
+          type: array
+          items: { $ref: '#/components/schemas/ShareUnits' }
+        shareOptions:
+          type: array
+          items: { $ref: '#/components/schemas/ShareOptionView' }
+        status: { $ref: '#/components/schemas/ProductStatus' }
+        stockStatus: { $ref: '#/components/schemas/ProductStockStatus' }
+        availableWholeItems: { type: integer }
+        mainImage: { $ref: '#/components/schemas/ProductImageView' }
+        detailImages:
+          type: array
+          items: { $ref: '#/components/schemas/ProductImageView' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    AdminProductListItem:
+      type: object
+      required: [id, name, originalPriceFen, wholeQuantity, unit, status, stockStatus, availableWholeItems, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        originalPriceFen: { type: integer }
+        wholeQuantity: { type: string }
+        unit: { type: string }
+        status: { $ref: '#/components/schemas/ProductStatus' }
+        stockStatus: { $ref: '#/components/schemas/ProductStockStatus' }
+        availableWholeItems: { type: integer }
+        mainImageUrl: { type: string }
+        createdAt: { type: string, format: date-time }
+    CreateProductRequest:
+      type: object
+      required: [name, originalPriceFen, wholeQuantity, unit, allowedShareUnits, initialStockWholeItems]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 60 }
+        description: { type: string, maxLength: 2000 }
+        originalPriceFen: { type: integer, minimum: 1, maximum: 99999999 }
+        wholeQuantity: { type: string, pattern: '^\d{1,9}(\.\d{1,3})?$', description: 必须 > 0 }
+        unit: { type: string, minLength: 1, maxLength: 10 }
+        allowedShareUnits:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ShareUnits' }
+        mainImageId: { type: string, format: uuid }
+        detailImageIds:
+          type: array
+          maxItems: 9
+          items: { type: string, format: uuid }
+        initialStockWholeItems: { type: integer, minimum: 0, maximum: 100000 }
+    UpdateProductRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateProductRequest'
+        - type: object
+          description: 不含 initialStockWholeItems；图片关联全量替换
+    StockView:
+      type: object
+      required: [productId, availableWholeItems, reservedWholeItems, updatedAt]
+      properties:
+        productId: { type: string, format: uuid }
+        availableWholeItems: { type: integer }
+        reservedWholeItems: { type: integer, description: 预留字段，当前恒为 0 }
+        updatedAt: { type: string, format: date-time }
+    StockMovementView:
+      type: object
+      required: [id, productId, delta, resultingAvailable, reason, createdAt]
+      properties:
+        id: { type: string }
+        productId: { type: string, format: uuid }
+        delta: { type: integer }
+        resultingAvailable: { type: integer }
+        reason: { type: string }
+        requestId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+    StockAdjustmentRequest:
+      type: object
+      required: [reason]
+      properties:
+        delta: { type: integer, minimum: -1000000, maximum: 1000000, description: 与 setTo 二选一 }
+        setTo: { type: integer, minimum: 0, maximum: 1000000, description: 与 delta 二选一 }
+        reason: { type: string, minLength: 1, maxLength: 200 }
+        requestId: { type: string, format: uuid, description: 可选幂等键（同商品去重） }
+    StockAdjustmentResult:
+      type: object
+      required: [stock, idempotentReplay]
+      properties:
+        stock: { $ref: '#/components/schemas/StockView' }
+        movement: { $ref: '#/components/schemas/StockMovementView' }
+        idempotentReplay: { type: boolean }
+    MiniProductListItem:
+      type: object
+      required: [id, name, originalPriceFen, userWholePriceFen, priceFromFen, stockStatus]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        mainImageUrl: { type: string }
+        originalPriceFen: { type: integer }
+        userWholePriceFen: { type: integer }
+        priceFromFen: { type: integer, description: 最低份额参考价（分） }
+        stockStatus: { $ref: '#/components/schemas/ProductStockStatus' }
+    MiniProductView:
+      type: object
+      required: [id, name, description, detailImageUrls, originalPriceFen, userWholePriceFen, priceFromFen, wholeQuantity, unit, shareOptions, stockStatus]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        mainImageUrl: { type: string }
+        detailImageUrls:
+          type: array
+          items: { type: string }
+        originalPriceFen: { type: integer }
+        userWholePriceFen: { type: integer }
+        priceFromFen: { type: integer }
+        wholeQuantity: { type: string }
+        unit: { type: string }
+        shareOptions:
+          type: array
+          items: { $ref: '#/components/schemas/ShareOptionView' }
+        stockStatus: { $ref: '#/components/schemas/ProductStockStatus' }

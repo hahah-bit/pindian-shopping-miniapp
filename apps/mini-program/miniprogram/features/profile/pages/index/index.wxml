@@ -1,0 +1,1 @@
+<view class="page"><view class="card"><view class="badge">框架预览 · 尚未登录</view><view class="title">个人中心</view><view class="subtitle">微信登录、手机号、收货地址、客服和用户协议入口将在对应功能完成后接入。</view></view><view class="card"><view class="section-title">开发说明</view><view class="subtitle">本轮只搭建平台框架，不包含真实支付或个人信息。touristappid 仅用于无身份能力的预览。</view></view></view>

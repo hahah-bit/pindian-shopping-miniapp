@@ -1,0 +1,33 @@
+{
+  "pages": [
+    "features/catalog/pages/index/index",
+    "features/orders/pages/index/index",
+    "features/profile/pages/index/index",
+    "features/catalog/pages/detail/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "拼单购物",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f4f7f6"
+  },
+  "tabBar": {
+    "color": "#7b8b85",
+    "selectedColor": "#287d68",
+    "list": [
+      {
+        "pagePath": "features/catalog/pages/index/index",
+        "text": "商品"
+      },
+      {
+        "pagePath": "features/orders/pages/index/index",
+        "text": "订单"
+      },
+      {
+        "pagePath": "features/profile/pages/index/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

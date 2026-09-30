@@ -1,0 +1,1 @@
+{ "desc": "框架阶段不开放页面索引", "rules": [{ "action": "disallow", "page": "*" }] }

@@ -1,0 +1,7 @@
+{
+  "appid": "touristappid",
+  "projectname": "pindian-shopping",
+  "miniprogramRoot": "miniprogram/",
+  "compileType": "miniprogram",
+  "setting": { "useCompilerPlugins": ["typescript"], "es6": true, "minified": true, "urlCheck": true }
+}

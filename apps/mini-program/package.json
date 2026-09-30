@@ -1,0 +1,6 @@
+{
+  "name": "@pindian/mini-program", "version": "0.1.0", "private": true,
+  "scripts": { "typecheck": "tsc -p tsconfig.json --noEmit" },
+  "dependencies": { "@pindian/contracts": "0.1.0" },
+  "devDependencies": { "typescript": "5.9.3", "miniprogram-api-typings": "5.2.3" }
+}

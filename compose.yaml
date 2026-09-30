@@ -1,0 +1,95 @@
+name: pindian-platform
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pindian}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?先执行 npm run env:init}
+      POSTGRES_DB: ${POSTGRES_DB:-pindian}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      PORT: "3000"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pindian}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pindian}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      MEDIA_DIR: /var/lib/pindian/media
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://127.0.0.1:3000}
+      ADMIN_SESSION_TTL_MINUTES: ${ADMIN_SESSION_TTL_MINUTES:-720}
+    volumes:
+      - media-data:/var/lib/pindian/media
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "infra/docker/health-api.cjs"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    init: true
+    restart: unless-stopped
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["node", "backend/dist/bootstrap/worker.js"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pindian}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pindian}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "infra/docker/health-worker.cjs"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    init: true
+    restart: unless-stopped
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin-web/Dockerfile
+    ports:
+      - "127.0.0.1:${ADMIN_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ && wget -q -O /dev/null http://127.0.0.1/api/health/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    profiles: ["cache"]
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  postgres-data:
+  media-data:
+  redis-data:
