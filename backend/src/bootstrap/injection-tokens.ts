@@ -13,5 +13,6 @@ export const TOKENS = {
   MediaUrlBuilder: Symbol('MEDIA_URL_BUILDER'),
   ImageInspector: Symbol('IMAGE_INSPECTOR'),
   ProductRepository: Symbol('PRODUCT_REPOSITORY'),
-  StockRepository: Symbol('STOCK_REPOSITORY')
+  StockRepository: Symbol('STOCK_REPOSITORY'),
+  AddressRepository: Symbol('ADDRESS_REPOSITORY')
 } as const;

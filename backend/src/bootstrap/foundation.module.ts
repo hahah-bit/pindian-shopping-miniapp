@@ -84,6 +84,12 @@ import { AdminStockController } from '../contexts/inventory/adapters/inbound/adm
 import { AdjustStock, ListStockMovements, type StockRepository } from '../contexts/inventory/application';
 import { PostgresStockRepository } from '../contexts/inventory/adapters/outbound/postgres/stock-repository';
 import { AdminCatalogQueries, CreateProductWorkflow, MiniCatalogQueries, PublishProductWorkflow } from '../workflows';
+import { CancelUnpaidOrder, PlaceOrderWorkflow } from '../workflows/order-place.workflow';
+import { OrderNumber } from '../contexts/ordering/domain/order';
+import { PostgresGroupRepository, PostgresShareReservationRepository } from '../contexts/group-buying/adapters/outbound/postgres/group-repositories';
+import { PostgresOrderRepository } from '../contexts/ordering/adapters/outbound/postgres/order-repository';
+import { MiniOrdersController } from '../contexts/ordering/adapters/inbound/mini/mini-orders.controller';
+import { getProductSnapshotPort, getStockReservationPort } from '../contexts/catalog/adapters/outbound/catalog-stock-adapters';
 import { contexts } from './context-registry';
 import { readConfig } from './config';
 import { TOKENS } from './injection-tokens';
@@ -102,7 +108,8 @@ import { TOKENS } from './injection-tokens';
     MiniAuthController,
     MiniProfileController,
     MiniAddressesController,
-    AdminUsersController
+    AdminUsersController,
+    MiniOrdersController
   ],
   providers: [
     { provide: TOKENS.PgPool, useFactory: () => new Pool({ connectionString: readConfig().databaseUrl, max: 10 }) },
@@ -134,6 +141,8 @@ import { TOKENS } from './injection-tokens';
     { provide: 'WECHAT_IDENTITY_REPOSITORY', useFactory: (pool: Pool) => new PostgresWechatIdentityRepository(pool), inject: [TOKENS.PgPool] },
     { provide: 'USER_SESSION_REPOSITORY', useFactory: (pool: Pool) => new PostgresUserSessionRepository(pool), inject: [TOKENS.PgPool] },
     { provide: 'ADDRESS_REPOSITORY', useFactory: (pool: Pool) => new PostgresAddressRepository(pool), inject: [TOKENS.PgPool] },
+    // AddressRepository 符号别名（T004 地址归属端口使用）
+    { provide: TOKENS.AddressRepository, useExisting: 'ADDRESS_REPOSITORY' },
     { provide: 'USER_TOKEN_SERVICE', useFactory: () => new TokenService() },
     { provide: HttpWxAuthAdapter, useFactory: () => new HttpWxAuthAdapter(readConfig()) },
     { provide: HttpWxAccessTokenAdapter, useFactory: () => new HttpWxAccessTokenAdapter(readConfig()) },
@@ -205,6 +214,31 @@ import { TOKENS } from './injection-tokens';
     { provide: TOKENS.StockRepository, useFactory: (pool: Pool) => new PostgresStockRepository(pool), inject: [TOKENS.PgPool] },
     { provide: AdjustStock, useFactory: (stocks: StockRepository, clock) => new AdjustStock({ stocks, clock }), inject: [TOKENS.StockRepository, TOKENS.Clock] },
     { provide: ListStockMovements, useFactory: (stocks: StockRepository) => new ListStockMovements({ stocks }), inject: [TOKENS.StockRepository] },
+    // 订单与拼单（T004）
+    { provide: 'GROUP_REPOSITORY', useFactory: (pool: Pool) => new PostgresGroupRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'SHARE_RESERVATION_REPOSITORY', useFactory: (pool: Pool) => new PostgresShareReservationRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'ORDER_REPOSITORY', useFactory: (pool: Pool) => new PostgresOrderRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'ADDRESS_OWNERSHIP_PORT', useFactory: (addresses: AddressRepository) => ({ getAddressForUser: (id: string, userId: string) => addresses.findById(id, userId).then((a) => a ? { addressId: a.state.addressId, receiverName: a.state.receiverName, phone: a.state.phone, province: a.state.province, city: a.state.city, district: a.state.district, detail: a.state.detail } : null) }), inject: [TOKENS.AddressRepository] },
+    { provide: 'PRODUCT_SNAPSHOT_PORT', useFactory: (pool: Pool) => getProductSnapshotPort(pool), inject: [TOKENS.PgPool] },
+    {
+      provide: PlaceOrderWorkflow,
+      useFactory: (groups, reservations, orders, addresses, products, stocks, pool: Pool, clock) =>
+        new PlaceOrderWorkflow({
+          groups, reservations, orders, addresses, products, stocks,
+          runner: new PostgresTransactionRunner(pool),
+          clock,
+          reservationTtlMinutes: 15,
+          generateId: () => crypto.randomUUID(),
+          generateOrderNo: () => OrderNumber.generate(new Date(), () => Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join(''))
+        }),
+      inject: ['GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'ORDER_REPOSITORY', 'ADDRESS_OWNERSHIP_PORT', 'PRODUCT_SNAPSHOT_PORT', 'STOCK_RESERVATION_PORT', TOKENS.PgPool, TOKENS.Clock]
+    },
+    { provide: 'STOCK_RESERVATION_PORT', useFactory: (pool: Pool) => getStockReservationPort(pool), inject: [TOKENS.PgPool] },
+    {
+      provide: CancelUnpaidOrder,
+      useFactory: (orders, reservations, groups, clock, pool: Pool) => new CancelUnpaidOrder({ orders, reservations, groups, clock, runner: new PostgresTransactionRunner(pool) }),
+      inject: ['ORDER_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'GROUP_REPOSITORY', TOKENS.Clock, TOKENS.PgPool]
+    },
     // 跨上下文工作流
     {
       provide: CreateProductWorkflow,

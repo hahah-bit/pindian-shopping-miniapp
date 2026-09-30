@@ -291,3 +291,66 @@ export interface AdminPhoneReveal {
   phone: string;
   countryCode: string;
 }
+
+// ---------- 订单与拼单（F015-F018） ----------
+
+export interface OrderQuoteView {
+  totalAmountFen: number;
+  goodsAmountFen: number;
+  serviceFeeFen: number;
+  tailAdjustFen: number;
+  isFinalOrder: boolean;
+}
+
+export interface OrderGroupSummary {
+  groupId: string;
+  status: 'open' | 'success' | 'failed';
+  paidUnits: number;
+  reservedUnits: number;
+  remainingCapacity: number;
+  deadline: string;
+}
+
+export interface MiniOrderView {
+  id: string;
+  orderNo: string;
+  status: 'unpaid' | 'paid' | 'cancelled' | 'expired';
+  units: number;
+  productId: string;
+  groupId: string;
+  quote: OrderQuoteView;
+  productSnapshot: { originalPriceFen: number; unit: string; wholeQuantityText: string; referenceQuantityText: string };
+  addressSnapshot: { receiverName: string; phone: string; province: string; city: string; district: string; detail: string };
+  groupSummary: OrderGroupSummary | null;
+  reservationExpiresAt: string;
+  paymentNotice: string;
+  createdAt: string;
+}
+
+export interface PlaceOrderRequest {
+  productId: string;
+  units: number;
+  addressId: string;
+  idempotencyKey: string;
+}
+
+export interface AdminOrderListItem {
+  id: string;
+  orderNo: string;
+  status: 'unpaid' | 'paid' | 'cancelled' | 'expired';
+  units: number;
+  nicknameMasked?: string;
+  totalAmountFen: number;
+  createdAt: string;
+}
+
+export interface AdminGroupListItem {
+  id: string;
+  productId: string;
+  status: 'open' | 'success' | 'failed';
+  paidUnits: number;
+  reservedUnits: number;
+  remainingCapacity: number;
+  deadline: string;
+  createdAt: string;
+}
