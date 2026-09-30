@@ -9,6 +9,12 @@ export interface StockAdjustCommand {
   reason: string;
   actorAdminId: string | null;
   requestId?: string;
+  /** T004：组预留同步变动 reserved 列（delta=0 允许纯 reserved 流转）。 */
+  reservedDelta?: number;
+  /** T004：delta=0 的纯 reserved 流转（消耗/释放）允许 available 不变。 */
+  allowNegativeAvailable?: boolean;
+  /** T004：业务幂等键（group-create:{groupId} 等），唯一索引防重。 */
+  businessKey?: string;
   now: Date;
 }
 

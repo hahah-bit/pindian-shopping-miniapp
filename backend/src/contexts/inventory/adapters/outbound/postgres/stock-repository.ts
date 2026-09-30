@@ -86,10 +86,12 @@ export class PostgresStockRepository implements StockRepository {
         return null;
       }
       const stock = stockOf(row);
-      if (command.requestId) {
+      const idemColumn = command.businessKey ? 'business_key' : 'request_id';
+      const idemValue = command.businessKey ?? command.requestId;
+      if (idemValue) {
         const { rows: existingRows } = await client.query<MovementRow & { id: string }>(
-          `SELECT ${MOVEMENT_COLUMNS} FROM stock_movements WHERE product_id = $1 AND request_id = $2`,
-          [command.productId, command.requestId]
+          `SELECT ${MOVEMENT_COLUMNS} FROM stock_movements WHERE product_id = $1 AND ${idemColumn} = $2`,
+          [command.productId, idemValue]
         );
         if (existingRows[0]) {
           await client.query('COMMIT');
@@ -102,10 +104,19 @@ export class PostgresStockRepository implements StockRepository {
         await client.query('COMMIT');
         return { stock, movement: null, replayed: true };
       }
-      const updated = stock.applyDelta(delta, command.now);
-      await client.query('UPDATE stocks SET available_whole_items = $2, updated_at = $3 WHERE product_id = $1', [
-        command.productId, updated.state.availableWholeItems, command.now
-      ]);
+      // reserved 同步变动（组预留/消耗/释放）；delta=0 时 available 不变
+      const reservedAfter = stock.state.reservedWholeItems + (command.reservedDelta ?? 0);
+      if (reservedAfter < 0) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        return null;
+      }
+      const updated = delta === 0 && command.allowNegativeAvailable
+        ? Stock.rehydrate({ ...stock.state, reservedWholeItems: reservedAfter, updatedAt: command.now })
+        : stock.applyDelta(delta, command.now);
+      await client.query(
+        `UPDATE stocks SET available_whole_items = $2, reserved_whole_items = $3, updated_at = $4 WHERE product_id = $1`,
+        [command.productId, updated.state.availableWholeItems, reservedAfter, command.now]
+      );
       try {
         const movement = StockMovement.create({
           productId: command.productId,
@@ -117,9 +128,9 @@ export class PostgresStockRepository implements StockRepository {
           createdAt: command.now
         });
         await client.query(
-          `INSERT INTO stock_movements (product_id, delta, resulting_available, reason, actor_admin_id, request_id, created_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING ${MOVEMENT_COLUMNS}`,
-          [command.productId, delta, updated.state.availableWholeItems, command.reason, command.actorAdminId, command.requestId ?? null, command.now]
+          `INSERT INTO stock_movements (product_id, delta, resulting_available, reason, actor_admin_id, request_id, business_key, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING ${MOVEMENT_COLUMNS}`,
+          [command.productId, delta, updated.state.availableWholeItems, command.reason, command.actorAdminId, command.requestId ?? null, command.businessKey ?? null, command.now]
         );
         await client.query('COMMIT');
         return {
@@ -129,12 +140,12 @@ export class PostgresStockRepository implements StockRepository {
         };
       } catch (error) {
         const code = (error as { code?: string }).code;
-        if (code === '23505' && command.requestId) {
+        if (code === '23505' && idemValue) {
           // 并发同幂等键：唯一索引拦截，转为幂等重放。
           await client.query('ROLLBACK');
           const { rows: replayRows } = await client.query<MovementRow & { id: string }>(
-            `SELECT ${MOVEMENT_COLUMNS} FROM stock_movements WHERE product_id = $1 AND request_id = $2`,
-            [command.productId, command.requestId]
+            `SELECT ${MOVEMENT_COLUMNS} FROM stock_movements WHERE product_id = $1 AND ${idemColumn} = $2`,
+            [command.productId, idemValue]
           );
           const replay = replayRows[0];
           if (!replay) throw error;
