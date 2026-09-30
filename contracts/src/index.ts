@@ -55,7 +55,8 @@ export type AdminPermission =
   | 'inventory:manage'
   | 'media:manage'
   | 'admin:manage'
-  | 'user:manage';
+  | 'user:manage'
+  | 'order:manage';
 
 export interface AdminProfile {
   id: string;
@@ -339,7 +340,7 @@ export interface AdminOrderListItem {
   orderNo: string;
   status: 'unpaid' | 'paid' | 'cancelled' | 'expired';
   units: number;
-  nicknameMasked?: string;
+  nickname: string;
   totalAmountFen: number;
   createdAt: string;
 }

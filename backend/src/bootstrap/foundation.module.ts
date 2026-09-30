@@ -88,7 +88,10 @@ import { CancelUnpaidOrder, PlaceOrderWorkflow } from '../workflows/order-place.
 import { OrderNumber } from '../contexts/ordering/domain/order';
 import { PostgresGroupRepository, PostgresShareReservationRepository } from '../contexts/group-buying/adapters/outbound/postgres/group-repositories';
 import { PostgresOrderRepository } from '../contexts/ordering/adapters/outbound/postgres/order-repository';
+import type { OrderRepository } from '../contexts/ordering/application/order-ports';
 import { MiniOrdersController } from '../contexts/ordering/adapters/inbound/mini/mini-orders.controller';
+import { AdminOrderGroupController } from '../contexts/ordering/adapters/inbound/admin/admin-order-group.controller';
+import { AdminOrderQueries, AdminGroupQueries } from '../contexts/ordering/application/admin-views';
 import { getProductSnapshotPort, getStockReservationPort } from '../contexts/catalog/adapters/outbound/catalog-stock-adapters';
 import { contexts } from './context-registry';
 import { readConfig } from './config';
@@ -109,7 +112,8 @@ import { TOKENS } from './injection-tokens';
     MiniProfileController,
     MiniAddressesController,
     AdminUsersController,
-    MiniOrdersController
+    MiniOrdersController,
+    AdminOrderGroupController
   ],
   providers: [
     { provide: TOKENS.PgPool, useFactory: () => new Pool({ connectionString: readConfig().databaseUrl, max: 10 }) },
@@ -238,6 +242,17 @@ import { TOKENS } from './injection-tokens';
       provide: CancelUnpaidOrder,
       useFactory: (orders, reservations, groups, clock, pool: Pool) => new CancelUnpaidOrder({ orders, reservations, groups, clock, runner: new PostgresTransactionRunner(pool) }),
       inject: ['ORDER_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'GROUP_REPOSITORY', TOKENS.Clock, TOKENS.PgPool]
+    },
+    // 后台订单/组查询（F018）
+    {
+      provide: 'ADMIN_ORDER_QUERIES',
+      useFactory: (orders: OrderRepository, users) => new AdminOrderQueries({ orders, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }),
+      inject: ['ORDER_REPOSITORY', 'USER_REPOSITORY']
+    },
+    {
+      provide: 'ADMIN_GROUP_QUERIES',
+      useFactory: (groups, reservations, orders: OrderRepository, users) => new AdminGroupQueries({ groups, reservations, orders, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }),
+      inject: ['GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'ORDER_REPOSITORY', 'USER_REPOSITORY']
     },
     // 跨上下文工作流
     {

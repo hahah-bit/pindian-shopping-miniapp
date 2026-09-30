@@ -5,10 +5,11 @@ export type AdminPermission =
   | 'inventory:manage'
   | 'media:manage'
   | 'admin:manage'
-  | 'user:manage';
+  | 'user:manage'
+  | 'order:manage';
 
 export const ROLE_PERMISSIONS: Readonly<Record<AdminRole, readonly AdminPermission[]>> = {
-  super_admin: ['catalog:manage', 'inventory:manage', 'media:manage', 'admin:manage', 'user:manage']
+  super_admin: ['catalog:manage', 'inventory:manage', 'media:manage', 'admin:manage', 'user:manage', 'order:manage']
 };
 
 export function permissionsOfRole(role: AdminRole): AdminPermission[] {

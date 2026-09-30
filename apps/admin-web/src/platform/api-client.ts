@@ -1,4 +1,6 @@
 import type {
+  AdminGroupListItem,
+  AdminOrderListItem,
   AdminPhoneReveal,
   AdminUserListItem,
   AdminProductListItem,
@@ -152,6 +154,33 @@ export async function adjustStock(id: string, body: StockAdjustmentRequest): Pro
 
 export async function listStockMovements(id: string, page = 1, pageSize = 10): Promise<PageView<StockMovementView>> {
   return request<PageView<StockMovementView>>(`/api/admin/v1/products/${id}/stock-movements?page=${page}&pageSize=${pageSize}`);
+}
+
+// ---------- 订单与拼单组（F018） ----------
+
+export async function listAdminOrders(query: { status?: string; keyword?: string; page?: number; pageSize?: number } = {}): Promise<PageView<AdminOrderListItem>> {
+  const params = new URLSearchParams();
+  if (query.status) params.set('status', query.status);
+  if (query.keyword) params.set('keyword', query.keyword);
+  params.set('page', String(query.page ?? 1));
+  params.set('pageSize', String(query.pageSize ?? 10));
+  return request<PageView<AdminOrderListItem>>(`/api/admin/v1/orders?${params.toString()}`);
+}
+
+export async function getAdminOrder(id: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/admin/v1/orders/${id}`);
+}
+
+export async function listAdminGroups(query: { status?: string; page?: number; pageSize?: number } = {}): Promise<PageView<AdminGroupListItem>> {
+  const params = new URLSearchParams();
+  if (query.status) params.set('status', query.status);
+  params.set('page', String(query.page ?? 1));
+  params.set('pageSize', String(query.pageSize ?? 10));
+  return request<PageView<AdminGroupListItem>>(`/api/admin/v1/groups?${params.toString()}`);
+}
+
+export async function getAdminGroup(id: string): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>(`/api/admin/v1/groups/${id}`);
 }
 
 // ---------- 用户管理（F012） ----------
