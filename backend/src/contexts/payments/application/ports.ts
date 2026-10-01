@@ -37,6 +37,7 @@ export interface GroupPayabilityPort {
 export interface PaymentRepository {
   insert(payment: Payment): Promise<void>;
   findByOrderId(orderId: string): Promise<Payment | null>;
+  findById(paymentId: string): Promise<Payment | null>;
   save(payment: Payment): Promise<void>;
 }
 

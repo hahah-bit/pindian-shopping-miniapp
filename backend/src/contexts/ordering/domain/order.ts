@@ -133,4 +133,10 @@ export class Order {
     if (this.state.status !== 'unpaid') throw new ApplicationError('ORDER_NOT_CANCELLABLE', '订单当前状态不可支付');
     return new Order({ ...this.state, status: 'paid', paidAt: now, updatedAt: now });
   }
+
+  /** 已支付订单取消（D007）：组 open 时用户取消，容量即扣，退款异步。 */
+  cancelPaid(now: Date): Order {
+    if (this.state.status !== 'paid') throw new ApplicationError('ORDER_NOT_CANCELLABLE', '仅已支付订单可走此取消流程');
+    return new Order({ ...this.state, status: 'cancelled', cancelledAt: now, updatedAt: now });
+  }
 }
