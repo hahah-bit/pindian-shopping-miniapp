@@ -119,3 +119,33 @@ test('其他插入失败：该组不计成功，异常不向上扩散（下一�
   assert.equal(groups, 0, '失败组不计入');
   assert.equal(repo.inserted.length, 1);
 });
+
+
+test('R01 单位：10 克组两笔 30 份额 → [5,5] 合计 10 克', async () => {
+  const groupsRepo = new FakeGroups(['gggggggg-4444-4444-8444-444444444003']);
+  groupsRepo.snapshots['gggggggg-4444-4444-8444-444444444003'] = { wholeQuantityText: '10', unit: '克' };
+  const twoOrders = paidOrders.slice(0, 2).map((o) => ({ ...o, units: 30 }));
+  const { task, repo } = build({ groups: groupsRepo, ordersByGroup: { 'gggggggg-4444-4444-8444-444444444003': twoOrders } });
+  const groups = await task.execute({ limit: 10 });
+  assert.equal(groups, 1);
+  assert.deepEqual(repo.inserted.map((f) => f.state.allocatedQuantityGrams), [5, 5]);
+  assert.equal(repo.inserted.reduce((s, f) => s + f.state.allocatedQuantityGrams, 0), 10, '合计 10 克');
+  assert.equal(repo.inserted[0].state.unit, '克');
+});
+
+test('R01 单位：计数单位 10 个三笔 20 份额 → [4,3,3] 整件', async () => {
+  const groupsRepo = new FakeGroups(['gggggggg-4444-4444-8444-444444444004']);
+  groupsRepo.snapshots['gggggggg-4444-4444-8444-444444444004'] = { wholeQuantityText: '10', unit: '个' };
+  const { task, repo } = build({ groups: groupsRepo, ordersByGroup: { 'gggggggg-4444-4444-8444-444444444004': paidOrders } });
+  await task.execute({ limit: 10 });
+  assert.deepEqual(repo.inserted.map((f) => f.state.allocatedQuantityGrams), [4, 3, 3]);
+});
+
+test('R01 单位：未知单位组跳过（不静默换算、不阻塞其他组）', async () => {
+  const groupsRepo = new FakeGroups(['gggggggg-4444-4444-8444-444444444005']);
+  groupsRepo.snapshots['gggggggg-4444-4444-8444-444444444005'] = { wholeQuantityText: '10', unit: '升' };
+  const { task, repo } = build({ groups: groupsRepo, ordersByGroup: { 'gggggggg-4444-4444-8444-444444444005': paidOrders } });
+  const groups = await task.execute({ limit: 10 });
+  assert.equal(groups, 0, '未知单位拒绝生成');
+  assert.equal(repo.inserted.length, 0);
+});

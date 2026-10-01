@@ -1,6 +1,6 @@
 import type { Clock } from '../shared/kernel';
 import { FulfillmentOrder } from '../contexts/fulfillment/domain/fulfillment-order';
-import { allocateQuantity, wholeQuantityToGrams } from '../contexts/fulfillment/domain/quantity-allocation';
+import { allocateQuantity, toMinimalUnits } from '../contexts/fulfillment/domain/quantity-allocation';
 import type { FulfillmentScanPorts, FulfillmentOrderRepository } from '../contexts/fulfillment/application/ports';
 
 /**
@@ -44,12 +44,13 @@ export class FulfillmentGenerationTask {
       console.error('[fulfillment-gen] 组不存在或无快照，跳过', groupId);
       return 0;
     }
-    const totalGrams = wholeQuantityToGrams(snapshot.wholeQuantityText);
-    if (totalGrams === null) {
-      // 商品整件数量无法精确换算整数克：配置错误，跳过并留痕（人工修正配置后重试）
-      console.error('[fulfillment-gen] 整件数量无法换算整数克，跳过组', groupId, snapshot.wholeQuantityText);
+    // R01（已确认 D011）：按快照单位换算最小履约单位（重量克化/计数整件/未知单位拒绝）
+    const minimal = toMinimalUnits(snapshot.wholeQuantityText, snapshot.unit);
+    if (minimal === null) {
+      console.error('[fulfillment-gen] 整件数量无法按单位换算为最小履约单位，跳过组', groupId, snapshot.wholeQuantityText, snapshot.unit);
       return 0;
     }
+    const totalGrams = minimal.units;
     const paidOrders = await this.deps.scan.listPaidByGroup(groupId);
     if (paidOrders.length === 0) {
       console.error('[fulfillment-gen] 成功组无 paid 订单，跳过', groupId);

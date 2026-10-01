@@ -1,4 +1,5 @@
 import { withExecutor, type PgExecutor } from '../../../adapters-shared/pg-client';
+import { formatQuantity } from '../domain/quantity-allocation';
 
 export interface AdminFulfillmentGroupSummary {
   groupId: string;
@@ -20,8 +21,9 @@ export interface AdminFulfillmentDetail {
   units: number;
   allocatedQuantityGrams: number;
   allocatedQuantityText: string;
+  unit: string;
   status: string;
-  receiver: { name: string; /** 仅 unmasked 选项（导出）携带原文，否则为空串 */ phone: string; phoneMasked: string; province: string; city: string; district: string; detail: string; version: number };
+  receiver: { name: string; /** 仅 unmasked 选项（导出）携带原文；普通响应不含明文字段 */ phone?: string; phoneMasked: string; province: string; city: string; district: string; detail: string; version: number };
   shipments: Array<{ id: string; quantityGrams: number; quantityText: string; isReissue: boolean; reissueReason: string | null; company: string; trackingNo: string; shippedAt: string }>;
 }
 
@@ -115,13 +117,14 @@ export class AdminFulfillmentQueries {
          ORDER BY created_at ASC, id ASC`,
         [groupId]
       );
+      const unitText = rows[0]?.unit ?? '';
       const shipmentsByFid = new Map<string, AdminFulfillmentDetail['shipments']>();
       for (const row of shipmentRows) {
         const list = shipmentsByFid.get(row.fulfillment_order_id) ?? [];
         list.push({
           id: row.id,
           quantityGrams: row.quantity_grams,
-          quantityText: (row.quantity_grams / 500).toFixed(3),
+          quantityText: formatQuantity(row.quantity_grams, unitText),
           isReissue: row.is_reissue,
           reissueReason: row.reissue_reason,
           company: row.company,
@@ -140,11 +143,12 @@ export class AdminFulfillmentQueries {
           nickname,
           units: row.units,
           allocatedQuantityGrams: row.allocated_quantity_grams,
-          allocatedQuantityText: (row.allocated_quantity_grams / 500).toFixed(3),
+          allocatedQuantityText: formatQuantity(row.allocated_quantity_grams, unitText),
+          unit: row.unit,
           status: row.status,
           receiver: {
             name: row.receiver_name,
-            phone: row.receiver_phone,
+            phone: options.unmasked ? row.receiver_phone : undefined,
             phoneMasked: options.unmasked ? row.receiver_phone : maskPhoneOf(row.receiver_phone),
             province: row.receiver_province,
             city: row.receiver_city,
@@ -161,7 +165,7 @@ export class AdminFulfillmentQueries {
 
   /** 发货单导出行（收货电话明文——面单必需；调用方必须写 fulfillment.export 审计）。 */
   async groupExportRows(groupId: string): Promise<Array<{
-    fulfillmentOrderId: string; orderNo: string; nickname: string; allocatedQuantityGrams: number;
+    fulfillmentOrderId: string; orderNo: string; nickname: string; allocatedQuantityGrams: number; allocatedQuantityText: string; unit: string;
     receiverName: string; receiverPhone: string; province: string; city: string; district: string; detail: string;
     status: string; shipments: Array<{ company: string; trackingNo: string; quantityGrams: number; isReissue: boolean; shippedAt: string }>;
   }> | null> {
@@ -172,8 +176,10 @@ export class AdminFulfillmentQueries {
       orderNo: item.orderNo,
       nickname: item.nickname,
       allocatedQuantityGrams: item.allocatedQuantityGrams,
+      allocatedQuantityText: item.allocatedQuantityText,
+      unit: item.unit,
       receiverName: item.receiver.name,
-      receiverPhone: item.receiver.phone,
+      receiverPhone: item.receiver.phone ?? '',
       province: item.receiver.province,
       city: item.receiver.city,
       district: item.receiver.district,

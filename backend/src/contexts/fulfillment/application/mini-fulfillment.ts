@@ -1,6 +1,6 @@
 import { ApplicationError, type Clock } from '../../../shared/kernel';
 import { FulfillmentOrder } from '../domain/fulfillment-order';
-import { gramsToJinText } from '../domain/quantity-allocation';
+import { formatQuantity } from '../domain/quantity-allocation';
 
 export interface MiniFulfillmentView {
   fulfillmentOrderId: string;
@@ -45,12 +45,12 @@ export class MiniFulfillmentQueries {
         fulfillmentOrderId: s.fulfillmentOrderId,
         status: s.status,
         allocatedQuantityGrams: s.allocatedQuantityGrams,
-        allocatedQuantityText: gramsToJinText(s.allocatedQuantityGrams),
+        allocatedQuantityText: formatQuantity(s.allocatedQuantityGrams, s.unit),
         unit: s.unit,
         shipments: shipments.map((shipment) => ({
           id: shipment.shipmentId,
           quantityGrams: shipment.quantityGrams,
-          quantityText: gramsToJinText(shipment.quantityGrams),
+          quantityText: formatQuantity(shipment.quantityGrams, s.unit),
           isReissue: shipment.isReissue,
           reissueReason: shipment.reissueReason,
           company: shipment.company,

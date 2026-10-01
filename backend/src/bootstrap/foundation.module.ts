@@ -109,6 +109,7 @@ import { ShipFulfillmentUseCase, UpdateReceiverUseCase, CompleteFulfillmentUseCa
 import { AdminFulfillmentQueries } from '../contexts/fulfillment/application/admin-fulfillment-queries';
 import { MiniFulfillmentQueries, ConfirmReceiptUseCase } from '../contexts/fulfillment/application/mini-fulfillment';
 import { PostgresFulfillmentRepository } from '../contexts/fulfillment/adapters/outbound/postgres/fulfillment-repository';
+import { TransactionalFulfillmentAudit } from '../contexts/fulfillment/adapters/outbound/postgres/fulfillment-audit';
 import { AdminFulfillmentController } from '../contexts/fulfillment/adapters/inbound/admin/fulfillment.controller';
 import { MiniFulfillmentController } from '../contexts/fulfillment/adapters/inbound/mini/mini-fulfillment.controller';
 import { AdminPayRefundQueries } from '../contexts/payments/application/admin-pay-refund-queries';
@@ -323,7 +324,7 @@ import { TOKENS } from './injection-tokens';
     { provide: 'ADMIN_PAY_REFUND_QUERIES', useFactory: (payments, refunds, users) => new AdminPayRefundQueries({ payments, refunds, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }), inject: ['PAYMENT_REPOSITORY', 'REFUND_REPOSITORY', 'USER_REPOSITORY'] },
     // T007 履约（F027-F030）
     { provide: 'FULFILLMENT_ORDER_REPOSITORY', useFactory: (pool: Pool) => new PostgresFulfillmentRepository(pool), inject: [TOKENS.PgPool] },
-    { provide: 'FULFILLMENT_AUDIT', useExisting: RecordOperation },
+    { provide: 'FULFILLMENT_AUDIT', useFactory: (pool: Pool) => new TransactionalFulfillmentAudit(pool), inject: [TOKENS.PgPool] },
     { provide: ShipFulfillmentUseCase, useFactory: (repo, audit, pool: Pool, clock) => new ShipFulfillmentUseCase({ fulfillmentOrders: repo, audit, runner: new PostgresTransactionRunner(pool), clock }), inject: ['FULFILLMENT_ORDER_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
     { provide: UpdateReceiverUseCase, useFactory: (repo, audit, pool: Pool, clock) => new UpdateReceiverUseCase({ fulfillmentOrders: repo, audit, runner: new PostgresTransactionRunner(pool), clock }), inject: ['FULFILLMENT_ORDER_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
     { provide: CompleteFulfillmentUseCase, useFactory: (repo, audit, pool: Pool, clock) => new CompleteFulfillmentUseCase({ fulfillmentOrders: repo, audit, runner: new PostgresTransactionRunner(pool), clock }), inject: ['FULFILLMENT_ORDER_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },

@@ -136,3 +136,30 @@ test('未发货完成拒绝；改址：版本递增、发货后锁定（RECEIVER
     (e) => e.code === 'RECEIVER_LOCKED'
   );
 });
+
+
+// ---- R06（D013 已确认）：补发不改主进度；全状态可补发；任何包裹锁地址 ----
+
+test('R06：pending_shipment 首次操作为补发 → 状态保持待发货（主进度不变）', async () => {
+  const { ship } = build(2500);
+  const result = await ship.execute({ fulfillmentId: FID, quantityGrams: 100, company: '顺丰', trackingNo: 'SF-R0', isReissue: true, reason: '凭证补寄', adminId: 'a', requestId: 'r' });
+  assert.equal(result.fulfillmentOrder.state.status, 'pending_shipment', '补发不得把待发货改为部分发货');
+  assert.equal(result.fulfillmentOrder.state.shippedQuantityGrams, 0);
+});
+
+test('R06：completed 后补发允许且状态保持 completed', async () => {
+  const { ship, complete } = build(2500);
+  await ship.execute({ fulfillmentId: FID, quantityGrams: 2500, company: '顺丰', trackingNo: 'SF-1', isReissue: false, reason: undefined, adminId: 'a', requestId: 'r' });
+  await complete.execute({ fulfillmentId: FID, by: 'admin', adminId: 'a', requestId: 'r' });
+  const result = await ship.execute({ fulfillmentId: FID, quantityGrams: 50, company: '顺丰', trackingNo: 'SF-RC', isReissue: true, reason: '完成后丢件补寄', adminId: 'a', requestId: 'r' });
+  assert.equal(result.fulfillmentOrder.state.status, 'completed', '补发不改变完成状态');
+});
+
+test('R06：仅有补发包裹也锁定地址（RECEIVER_LOCKED）', async () => {
+  const { ship, receiver } = build(2500);
+  await ship.execute({ fulfillmentId: FID, quantityGrams: 100, company: '顺丰', trackingNo: 'SF-R1', isReissue: true, reason: '凭证补寄', adminId: 'a', requestId: 'r' });
+  await assert.rejects(
+    () => receiver.execute({ fulfillmentId: FID, receiver: { name: '李四', phone: '13900005678', province: '广东省', city: '广州市', district: '天河区', detail: 'x' }, adminId: 'a', requestId: 'r' }),
+    (e) => e.code === 'RECEIVER_LOCKED'
+  );
+});

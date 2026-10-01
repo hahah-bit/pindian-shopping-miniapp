@@ -11,7 +11,8 @@ function requireUuid(input: unknown, label: string): string {
 }
 
 export interface FulfillmentAuditPort {
-  execute(entry: { adminId: string | null; action: string; resourceType: string; resourceId: string; requestId: string | null; detail?: Record<string, unknown> }): Promise<void>;
+  /** sessionTx：审计与业务同事务写入（R04）——审计失败整体回滚，业务不会"已提交却报错"。 */
+  execute(entry: { adminId: string | null; action: string; resourceType: string; resourceId: string; requestId: string | null; detail?: Record<string, unknown> }, sessionTx?: unknown): Promise<void>;
 }
 
 export interface AdminFulfillmentDeps {
@@ -39,6 +40,7 @@ export class ShipFulfillmentUseCase {
     if (input.isReissue && (typeof input.reason !== 'string' || !input.reason.trim())) throw new ApplicationError('VALIDATION_FAILED', '补发必须填写原因');
 
     try {
+      // R04：发货、状态与审计同一事务——审计失败整体回滚（不会"已提交却报错"，也不会漏审计）
       const result = await this.deps.runner.run(async (sessionTx) => {
         const fulfillment = await this.deps.fulfillmentOrders.findByIdForUpdate(fulfillmentId, sessionTx);
         if (!fulfillment) throw new ApplicationError('NOT_FOUND', '履约单不存在');
@@ -51,15 +53,15 @@ export class ShipFulfillmentUseCase {
         }, this.deps.clock.now());
         await this.deps.fulfillmentOrders.insertShipment(entity, sessionTx);
         await this.deps.fulfillmentOrders.save(order, sessionTx);
+        await this.deps.audit.execute({
+          adminId: input.adminId,
+          action: input.isReissue ? 'fulfillment.reissue' : 'fulfillment.ship',
+          resourceType: 'fulfillment_order',
+          resourceId: fulfillmentId,
+          requestId: input.requestId,
+          detail: { shipmentId: entity.shipmentId, quantityGrams: entity.quantityGrams, company, trackingNo, reason: entity.reissueReason ?? undefined }
+        }, sessionTx);
         return { order, entity };
-      });
-      await this.deps.audit.execute({
-        adminId: input.adminId,
-        action: input.isReissue ? 'fulfillment.reissue' : 'fulfillment.ship',
-        resourceType: 'fulfillment_order',
-        resourceId: fulfillmentId,
-        requestId: input.requestId,
-        detail: { shipmentId: result.entity.shipmentId, quantityGrams: result.entity.quantityGrams, company, trackingNo, reason: result.entity.reissueReason ?? undefined }
       });
       return { fulfillmentOrder: result.order, shipmentId: result.entity.shipmentId };
     } catch (error) {
@@ -85,21 +87,20 @@ export class UpdateReceiverUseCase {
     const result = await this.deps.runner.run(async (sessionTx) => {
       const fulfillment = await this.deps.fulfillmentOrders.findByIdForUpdate(fulfillmentId, sessionTx);
       if (!fulfillment) throw new ApplicationError('NOT_FOUND', '履约单不存在');
+      // R06（D013 已确认）：地址锁定 = 存在任何包裹（含补发）——面单/轨迹依赖原地址
+      const shipments = await this.deps.fulfillmentOrders.listShipments(fulfillmentId);
+      if (shipments.length > 0 || fulfillment.state.shippedQuantityGrams > 0) {
+        throw new ApplicationError('RECEIVER_LOCKED', '已存在包裹或发货事实，收货信息已锁定');
+      }
       const updated = fulfillment.updateReceiver({
         name: receiver.name as string, phone: receiver.phone as string,
         province: receiver.province as string, city: receiver.city as string,
         district: receiver.district as string, detail: receiver.detail as string
       }, this.deps.clock.now());
+      // R04：审计与业务同事务（见 ShipFulfillmentUseCase）
       await this.deps.fulfillmentOrders.save(updated, sessionTx);
+      await this.deps.audit.execute({ adminId: input.adminId, action: 'fulfillment.receiver_update', resourceType: 'fulfillment_order', resourceId: fulfillmentId, requestId: input.requestId, detail: { fromVersion: fulfillment.state.receiver.version, toVersion: fulfillment.state.receiver.version + 1 } }, sessionTx);
       return updated;
-    });
-    await this.deps.audit.execute({
-      adminId: input.adminId,
-      action: 'fulfillment.receiver_update',
-      resourceType: 'fulfillment_order',
-      resourceId: fulfillmentId,
-      requestId: input.requestId,
-      detail: { fromVersion: result.state.receiver.version - 1, toVersion: result.state.receiver.version }
     });
     return { fulfillmentOrder: result };
   }
@@ -115,19 +116,22 @@ export class CompleteFulfillmentUseCase {
       const fulfillment = await this.deps.fulfillmentOrders.findByIdForUpdate(fulfillmentId, sessionTx);
       if (!fulfillment) throw new ApplicationError('NOT_FOUND', '履约单不存在');
       const completed = fulfillment.markCompleted(input.by, this.deps.clock.now());
-      if (completed !== fulfillment) await this.deps.fulfillmentOrders.save(completed, sessionTx);
+      if (completed !== fulfillment) {
+        await this.deps.fulfillmentOrders.save(completed, sessionTx);
+        if (input.by === 'admin') {
+          // R04：审计与业务同事务
+          await this.deps.audit.execute({
+            adminId: input.adminId ?? null,
+            action: 'fulfillment.complete',
+            resourceType: 'fulfillment_order',
+            resourceId: fulfillmentId,
+            requestId: input.requestId,
+            detail: { completedBy: 'admin' }
+          }, sessionTx);
+        }
+      }
       return completed;
     });
-    if (input.by === 'admin') {
-      await this.deps.audit.execute({
-        adminId: input.adminId ?? null,
-        action: 'fulfillment.complete',
-        resourceType: 'fulfillment_order',
-        resourceId: fulfillmentId,
-        requestId: input.requestId,
-        detail: { completedBy: 'admin' }
-      });
-    }
     return { fulfillmentOrder: result };
   }
 }

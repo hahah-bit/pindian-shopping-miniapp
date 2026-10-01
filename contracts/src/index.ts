@@ -484,6 +484,7 @@ export interface AdminFulfillmentDetail {
   units: number;
   allocatedQuantityGrams: number;
   allocatedQuantityText: string;
+  unit: string;
   status: FulfillmentStatus;
   receiver: { name: string; phoneMasked: string; province: string; city: string; district: string; detail: string; version: number };
   shipments: AdminShipmentView[];

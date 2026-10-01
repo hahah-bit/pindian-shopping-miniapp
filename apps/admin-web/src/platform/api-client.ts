@@ -254,6 +254,10 @@ export async function completeFulfillmentOrder(id: string): Promise<{ fulfillmen
   return request(`/api/admin/v1/fulfillment/orders/${id}/complete`, { method: 'POST', body: '{}' });
 }
 
+export async function updateFulfillmentReceiver(id: string, body: { receiverName: string; phone: string; province: string; city: string; district: string; detail: string }): Promise<{ fulfillmentOrder: { id: string; receiverVersion: number } }> {
+  return request(`/api/admin/v1/fulfillment/orders/${id}/receiver`, { method: 'POST', body: JSON.stringify(body) });
+}
+
 export function exportShipmentsCsv(groupId: string): string {
   return `/api/admin/v1/fulfillment/groups/${groupId}/shipments/export`;
 }

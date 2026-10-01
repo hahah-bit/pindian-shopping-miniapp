@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import type { AdminFulfillmentDetail, AdminFulfillmentGroupSummary } from '@pindian/contracts';
-import { ApiClientError, exportShipmentsCsv, getFulfillmentGroup, listFulfillmentGroups, shipFulfillmentOrder } from '../../platform/api-client';
+import { ApiClientError, completeFulfillmentOrder, exportShipmentsCsv, getFulfillmentGroup, listFulfillmentGroups, shipFulfillmentOrder, updateFulfillmentReceiver } from '../../platform/api-client';
 import { storedToken } from '../../platform/api-client';
 
 /** 履约管理（T007 F028）：待履约组、分配明细、发货/补发、导出发货单。发货数量以整数克填写。 */
@@ -19,6 +19,10 @@ const notice = ref('');
 const shipTarget = ref<AdminFulfillmentDetail | null>(null);
 const shipForm = ref({ quantityGrams: '', company: '', trackingNo: '', isReissue: false, reason: '' });
 const shipping = ref(false);
+const receiverTarget = ref<AdminFulfillmentDetail | null>(null);
+const receiverForm = ref({ receiverName: '', phone: '', province: '', city: '', district: '', detail: '' });
+const savingReceiver = ref(false);
+const completingId = ref('');
 
 const FULFILLMENT_STATUS: Record<string, string> = { pending_shipment: '待发货', partially_shipped: '部分发货', shipped: '已发货', completed: '已完成' };
 
@@ -57,6 +61,48 @@ function backToList() {
   tab.value = 'groups';
   detail.value = [];
   void load(page.value);
+}
+
+function openReceiver(item: AdminFulfillmentDetail) {
+  receiverTarget.value = item;
+  receiverForm.value = { receiverName: item.receiver.name, phone: '', province: item.receiver.province, city: item.receiver.city, district: item.receiver.district, detail: item.receiver.detail };
+  error.value = '';
+}
+
+async function confirmReceiver() {
+  if (!receiverTarget.value || savingReceiver.value) return;
+  const form = receiverForm.value;
+  if (!form.receiverName.trim() || !form.phone.trim() || !form.detail.trim()) { error.value = '收货人/电话/详址必填'; return; }
+  savingReceiver.value = true;
+  error.value = '';
+  try {
+    await updateFulfillmentReceiver(receiverTarget.value.fulfillmentOrderId, {
+      receiverName: form.receiverName.trim(), phone: form.phone.trim(),
+      province: form.province.trim(), city: form.city.trim(), district: form.district.trim(), detail: form.detail.trim()
+    });
+    notice.value = '收货信息已更新（新版本）';
+    receiverTarget.value = null;
+    await openDetail(detailGroupId.value);
+  } catch (cause) {
+    error.value = cause instanceof ApiClientError ? `${cause.message}（${cause.code}）` : '改址失败';
+  } finally {
+    savingReceiver.value = false;
+  }
+}
+
+async function markComplete(item: AdminFulfillmentDetail) {
+  if (!window.confirm(`确认将 ${item.orderNo} 标记为已完成？`)) return;
+  completingId.value = item.fulfillmentOrderId;
+  error.value = '';
+  try {
+    await completeFulfillmentOrder(item.fulfillmentOrderId);
+    notice.value = '已标记完成';
+    await openDetail(detailGroupId.value);
+  } catch (cause) {
+    error.value = cause instanceof ApiClientError ? `${cause.message}（${cause.code}）` : '标记失败';
+  } finally {
+    completingId.value = '';
+  }
 }
 
 function openShip(item: AdminFulfillmentDetail) {
@@ -177,16 +223,20 @@ onMounted(() => load(1));
         <tr v-for="item in detail" :key="item.fulfillmentOrderId">
           <td class="name-cell">{{ item.nickname }}<small>{{ item.orderNo }}</small></td>
           <td>{{ item.units }}/60</td>
-          <td>{{ item.allocatedQuantityText }} 斤（{{ item.allocatedQuantityGrams }}g）</td>
+          <td>{{ item.allocatedQuantityText }} {{ item.unit }}（{{ item.allocatedQuantityGrams }} 最小单位）</td>
           <td><span class="badge" :class="{ warn: item.status !== 'shipped' && item.status !== 'completed' }">{{ FULFILLMENT_STATUS[item.status] }}</span></td>
           <td>{{ item.receiver.name }}<small>{{ item.receiver.phoneMasked }} · {{ item.receiver.province }}{{ item.receiver.city }}{{ item.receiver.district }}</small></td>
           <td>
             <div v-for="shipment in item.shipments" :key="shipment.id" style="font-size: 12px">
-              {{ shipment.isReissue ? '[补发]' : '' }}{{ shipment.company }} {{ shipment.trackingNo }}（{{ shipment.quantityText }} 斤）
+              {{ shipment.isReissue ? '[补发]' : '' }}{{ shipment.company }} {{ shipment.trackingNo }}（{{ shipment.quantityText }} {{ item.unit }}）
             </div>
             <span v-if="!item.shipments.length" style="color: #999">暂无</span>
           </td>
-          <td class="actions"><button v-if="item.status !== 'completed'" type="button" @click="openShip(item)">发货 / 补发</button></td>
+          <td class="actions">
+            <button type="button" @click="openShip(item)">发货 / 补发</button>
+            <button v-if="item.status === 'pending_shipment' || item.status === 'partially_shipped'" type="button" @click="openReceiver(item)">改收货</button>
+            <button v-if="item.status === 'shipped'" type="button" :disabled="completingId === item.fulfillmentOrderId" @click="markComplete(item)">{{ completingId === item.fulfillmentOrderId ? '提交中…' : '标记完成' }}</button>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -209,5 +259,19 @@ onMounted(() => load(1));
       <button type="button" class="primary" :disabled="shipping" @click="confirmShip">{{ shipping ? '提交中…' : '确认发货' }}</button>
     </div>
     <p class="hint">非补发发货计入进度：Σ数量 = 分配数量即全部发货；补发仅记录轨迹，不改变进度。运单号全局唯一。</p>
+  </div>
+
+  <div v-if="receiverTarget" class="detail-panel">
+    <div class="panel-head"><h3>修改收货信息 · {{ receiverTarget.orderNo }}（当前版本 v{{ receiverTarget.receiver.version }}）</h3><button type="button" @click="receiverTarget = null">关闭</button></div>
+    <p class="hint">仅发货前可修改；保存后版本 +1 并写审计。电话输入原文（内部保存，展示仍脱敏）。</p>
+    <div class="controls" style="flex-wrap: wrap; gap: 8px">
+      <input v-model="receiverForm.receiverName" placeholder="收货人" aria-label="收货人" style="width: 110px" />
+      <input v-model="receiverForm.phone" placeholder="电话（原文）" aria-label="电话" style="width: 140px" />
+      <input v-model="receiverForm.province" placeholder="省" aria-label="省" style="width: 90px" />
+      <input v-model="receiverForm.city" placeholder="市" aria-label="市" style="width: 90px" />
+      <input v-model="receiverForm.district" placeholder="区" aria-label="区" style="width: 90px" />
+      <input v-model="receiverForm.detail" placeholder="详址" aria-label="详址" style="width: 220px" />
+      <button type="button" class="primary" :disabled="savingReceiver" @click="confirmReceiver">{{ savingReceiver ? '保存中…' : '保存' }}</button>
+    </div>
   </div>
 </template>

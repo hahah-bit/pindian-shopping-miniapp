@@ -1938,8 +1938,9 @@ components:
         orderNo: { type: string }
         nickname: { type: string }
         units: { type: integer }
-        allocatedQuantityGrams: { type: integer, description: 整数克（1 斤=500g） }
-        allocatedQuantityText: { type: string, description: 斤（3 位小数） }
+        allocatedQuantityGrams: { type: integer, description: 最小履约单位数（重量=克；计数=件） }
+        allocatedQuantityText: { type: string, description: 原快照单位展示文本 }
+        unit: { type: string, description: 原快照计量单位 }
         status: { type: string, enum: [pending_shipment, partially_shipped, shipped, completed] }
         receiver:
           type: object

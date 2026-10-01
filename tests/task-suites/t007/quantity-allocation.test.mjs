@@ -5,8 +5,10 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 let allocateQuantity;
 let wholeQuantityToGrams;
+let toMinimalUnits;
+let formatQuantity;
 try {
-  ({ allocateQuantity, wholeQuantityToGrams } = require('../../../backend/dist/contexts/fulfillment/domain/quantity-allocation.js'));
+  ({ allocateQuantity, wholeQuantityToGrams, toMinimalUnits, formatQuantity } = require('../../../backend/dist/contexts/fulfillment/domain/quantity-allocation.js'));
 } catch {
   allocateQuantity = null;
 }
@@ -76,4 +78,42 @@ test('wholeQuantityToGrams：斤文本转整数克；非整数克返回 null', (
   assert.equal(wholeQuantityToGrams('0.001'), null, '0.001 斤 = 0.5g 非整数克 → null（生成时拒绝）');
   assert.equal(wholeQuantityToGrams('abc'), null);
   assert.equal(wholeQuantityToGrams('0'), null);
+});
+
+
+// ---- R01 单位注册表（独立审查：10 克组被分配 5000 克） ----
+
+test('R01 单位注册表：重量单位按克换算（斤/千克/克/两）', () => {
+  assert.deepEqual(toMinimalUnits('10', '斤'), { units: 5000, kind: 'weight' });
+  assert.deepEqual(toMinimalUnits('2.5', '斤'), { units: 1250, kind: 'weight' });
+  assert.deepEqual(toMinimalUnits('10', '克'), { units: 10, kind: 'weight' });
+  assert.deepEqual(toMinimalUnits('1', '千克'), { units: 1000, kind: 'weight' });
+  assert.deepEqual(toMinimalUnits('0.5', 'kg'), { units: 500, kind: 'weight' });
+  assert.deepEqual(toMinimalUnits('4', '两'), { units: 200, kind: 'weight' });
+});
+
+test('R01 单位注册表：计数单位按整件；小数数量不可履约', () => {
+  assert.deepEqual(toMinimalUnits('10', '个'), { units: 10, kind: 'countable' });
+  assert.deepEqual(toMinimalUnits('3', '箱'), { units: 3, kind: 'countable' });
+  assert.equal(toMinimalUnits('2.5', '个'), null, '0.5 个无法履约');
+});
+
+test('R01 单位注册表：未知单位拒绝；非整数克重量拒绝；非法文本拒绝', () => {
+  assert.equal(toMinimalUnits('10', '升'), null, '未知单位生成时拒绝并留痕');
+  assert.equal(toMinimalUnits('0.001', '斤'), null, '0.5g 非整数克');
+  assert.equal(toMinimalUnits('abc', '斤'), null);
+  assert.equal(toMinimalUnits('0', '克'), null);
+});
+
+test('R01 展示换算：formatQuantity 回原单位（斤 3 位小数；克整数；计数整数）', () => {
+  assert.equal(formatQuantity(5000, '斤'), '10.000');
+  assert.equal(formatQuantity(1667, '斤'), '3.334');
+  assert.equal(formatQuantity(10, '克'), '10');
+  assert.equal(formatQuantity(4, '个'), '4');
+});
+
+test('R01 端到端分配：10 克组两笔 30 份额 → [5,5]（修复审查探针缺陷）', () => {
+  const result = allocateQuantity(10, [{ orderId: 'a', units: 30 }, { orderId: 'b', units: 30 }]);
+  assert.deepEqual(result.map((r) => r.grams), [5, 5]);
+  assert.equal(result.reduce((s, r) => s + r.grams, 0), 10);
 });
