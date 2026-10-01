@@ -155,6 +155,8 @@ onMounted(() => load(1));
     </tbody>
   </table>
 
+  <div v-if="tab === 'groups' && !items.length && !loading && !error" class="placeholder"><h2>暂无数据</h2><p>拼单成功后此处展示履约组。</p></div>
+
   <div v-if="tab === 'groups' && items.length" class="pager">
     <button type="button" :disabled="page <= 1 || loading" @click="load(page - 1)">上一页</button>
     <span>第 {{ page }} / {{ totalPages() }} 页 · 共 {{ total }} 条</span>
