@@ -126,6 +126,21 @@ export class PostgresOrderRepository implements OrderRepository {
     });
   }
 
+  /** 组截止退款扫描（复验 A02）：failed 组内 paid 且无退款单（幂等重扫）。 */
+  async listPaidWithoutRefundInFailedGroups(limit: number): Promise<Order[]> {
+    return this.query(async (client) => {
+      const { rows } = await client.query(
+        `SELECT o.* FROM orders o
+         JOIN groups g ON g.id = o.group_id AND g.status = 'failed'
+         WHERE o.status = 'paid'
+         AND NOT EXISTS (SELECT 1 FROM refunds r WHERE r.order_id = o.id)
+         ORDER BY o.created_at ASC
+         LIMIT $1`, [limit]
+      );
+      return rows.map((row) => orderOf(row));
+    });
+  }
+
   async listByUser(userId: string, page: number, pageSize: number): Promise<{ items: Order[]; total: number }> {
     return this.query(async (client) => {
       const { rows: countRows } = await client.query<{ total: string }>('SELECT COUNT(*)::int4 AS total FROM orders WHERE user_id = $1', [userId]);

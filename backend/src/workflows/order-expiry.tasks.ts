@@ -45,14 +45,27 @@ export class ExpireReservationsTask {
 
 /**
  * 组截止任务：open 且 deadline 已过 → 组内残留预占/订单过期 → 组 failed → 整件库存释放。
- * 已支付订单保持 paid（退款属支付阶段边界，D005）。
+ * 复验 A02：组失效后为**已支付且无退款单**的订单创建 group_failed 全额退款——
+ * 逐单独立事务（单笔失败不阻塞他单），失败订单由下一轮重扫恢复（DB 驱动，重启安全）；
+ * 已有退款单不重复建（查重 + refunds.payment_id 唯一约束兜底）。
  */
 export class FailDeadlineGroupsTask {
-  constructor(private readonly deps: ExpiryTaskDeps & { stocks: StockReservationPort }) {}
+  constructor(private readonly deps: ExpiryTaskDeps & {
+    stocks: StockReservationPort;
+    payments: { findByOrderId(orderId: string): Promise<{ state: { paymentId: string; userId: string; status: string; amountFen: number } } | null> };
+    refunds: { createFullRefund(input: { paymentId: string; orderId: string; userId: string; amountFen: number; reason: 'group_failed' }, sessionTx?: unknown): Promise<{ refundId: string }> };
+    orders: ExpiryTaskDeps['orders'] & { listPaidWithoutRefundInFailedGroups?(limit: number): Promise<Array<{ state: { orderId: string } }>> };
+  }) {}
 
   async execute(input: { limit?: number }): Promise<number> {
     const limit = input.limit ?? 100;
     const now = this.deps.clock.now();
+    let processed = await this.failExpiredGroups(limit, now);
+    processed += await this.refundPaidOrdersInFailedGroups(limit);
+    return processed;
+  }
+
+  private async failExpiredGroups(limit: number, now: Date): Promise<number> {
     const groups = await this.deps.groups.findExpiredOpenGroups(now, limit);
     let processed = 0;
     for (const group of groups) {
@@ -73,6 +86,33 @@ export class FailDeadlineGroupsTask {
         if (released) processed++;
       } catch (error) {
         console.error('[order-expiry] 组截止处理失败', group.state.groupId, error instanceof Error ? error.message : error);
+      }
+    }
+    return processed;
+  }
+
+  private async refundPaidOrdersInFailedGroups(limit: number): Promise<number> {
+    const finder = this.deps.orders.listPaidWithoutRefundInFailedGroups?.bind(this.deps.orders);
+    if (!finder) return 0;
+    let processed = 0;
+    for (const order of await finder(limit)) {
+      const orderId = order.state.orderId;
+      try {
+        const payment = await this.deps.payments.findByOrderId(orderId);
+        if (!payment || payment.state.status !== 'succeeded') continue;
+        await this.deps.runner.run(async (sessionTx) => {
+          await this.deps.refunds.createFullRefund({
+            paymentId: payment.state.paymentId,
+            orderId,
+            userId: payment.state.userId,
+            amountFen: payment.state.amountFen,
+            reason: 'group_failed'
+          }, sessionTx);
+        });
+        processed++;
+      } catch (error) {
+        // 单笔失败（含并发唯一约束冲突）只影响本单；下一轮重扫自动补齐
+        console.error('[order-expiry] 组失败退款建单失败', orderId, error instanceof Error ? error.message : error);
       }
     }
     return processed;

@@ -1062,7 +1062,7 @@ paths:
   /api/payments/v1/notify:
     post:
       operationId: wechatPayNotify
-      summary: 微信支付回调（微信服务器调用；Wechatpay-Serial/Signature/Timestamp/Nonce 头验签 + APIv3 AES-256-GCM 解密 + 幂等应用；验签失败 400）
+      summary: 微信支付/退款回调（微信服务器调用；平台公钥 RSA 强制验签（缺公钥/缺签名/错签名/超窗一律 400）+ 原始报文体 + APIv3 AES-256-GCM 解密 + 按 event_type 分发幂等应用（TRANSACTION.*→支付确认；REFUND.*→退款结果确认））
       security: []
       parameters:
         - { name: Wechatpay-Serial, in: header, required: true, schema: { type: string } }
@@ -1087,7 +1087,7 @@ paths:
                     nonce: { type: string }
                     associated_data: { type: string }
       responses:
-        '200': { description: 已受理（幂等；重复通知返回同样成功） }
+        '200': { description: 已受理（幂等；重复通知返回同样成功；未知事件类型同样受理） }
         '400': { $ref: '#/components/responses/Error400' }
 components:
   securitySchemes:

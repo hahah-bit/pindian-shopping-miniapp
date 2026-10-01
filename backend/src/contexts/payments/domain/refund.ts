@@ -74,12 +74,12 @@ export class Refund {
     return new Refund({ ...this.state, status: 'processing', updatedAt: now });
   }
 
-  /** 仅渠道证据（回调/查询 SUCCESS）可标记成功。 */
-  markSucceeded(now: Date): Refund {
+  /** 仅渠道证据（回调/查询 SUCCESS）可标记成功；渠道退款单号随证据记录（首次为准）。 */
+  markSucceeded(now: Date, channelRefundId?: string): Refund {
     if (this.state.status !== 'processing' && this.state.status !== 'submitted') {
       throw new ApplicationError('REFUND_NOT_ALLOWED', '退款单当前状态不可标记成功');
     }
-    return new Refund({ ...this.state, status: 'succeeded', succeededAt: now, updatedAt: now });
+    return new Refund({ ...this.state, status: 'succeeded', channelRefundId: channelRefundId ?? this.state.channelRefundId, succeededAt: now, updatedAt: now });
   }
 
   markFailed(reason: string, now: Date): Refund {

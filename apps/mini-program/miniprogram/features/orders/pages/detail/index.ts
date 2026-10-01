@@ -36,6 +36,7 @@ Page({
     canCancel: false,
     canPaidCancel: false,
     refundItems: [] as Array<{ id: string; statusText: string; amountText: string; createdAtText: string }>,
+    refundLoadError: false,
     countdownText: ''
   },
 
@@ -81,15 +82,19 @@ Page({
     });
   },
 
-  /** 退款进度（已支付订单可能存在全额退款；失败由平台重试，无需用户操作）。 */
+  /**
+   * 退款进度（复验 A04）：cancelled（已支付取消）与 expired（迟到支付退款）同样展示真实进度；
+   * 查询失败显式提示并可重试，与"无退款记录"区分。
+   */
   async loadRefunds(order: MiniOrderView) {
-    if (order.status !== 'paid') {
-      this.setData({ refundItems: [] });
+    if (order.status === 'unpaid') {
+      this.setData({ refundItems: [], refundLoadError: false });
       return;
     }
     try {
       const { items } = await listMyRefunds(order.id);
       this.setData({
+        refundLoadError: false,
         refundItems: items.map((refund) => ({
           id: refund.id,
           statusText: REFUND_STATUS_TEXT[refund.status],
@@ -99,9 +104,14 @@ Page({
       });
     } catch (cause) {
       if (cause instanceof UserAuthExpiredError) throw cause;
-      // 退款进度加载失败不阻断订单详情展示
-      this.setData({ refundItems: [] });
+      // 查询失败 ≠ 无退款记录：显式提示，详情主体不受影响
+      this.setData({ refundItems: [], refundLoadError: true });
     }
+  },
+
+  retryRefunds() {
+    const order = this.data.order;
+    if (order) void this.loadRefunds(order);
   },
 
   /** 预占到期倒计时（以后端 expiresAt 为准，本地只做展示计时）。 */

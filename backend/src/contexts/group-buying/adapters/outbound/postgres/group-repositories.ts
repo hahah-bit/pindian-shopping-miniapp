@@ -55,6 +55,18 @@ export class PostgresGroupRepository implements GroupRepository {
     });
   }
 
+  /** D006 让利台账：组成功同事务落账；group_id 唯一，重复落账幂等跳过。 */
+  async recordSettlement(input: { groupId: string; expectedTotalFen: number; settledTotalFen: number; diffFen: number; now: Date }, sessionTx?: unknown): Promise<void> {
+    const executor = (sessionTx ?? this.pool) as PgExecutor;
+    await withExecutor(executor, async (client) => {
+      await client.query(
+        `INSERT INTO group_settlements (group_id, expected_total_fen, settled_total_fen, diff_fen, settled_at)
+         VALUES ($1, $2, $3, $4, $5) ON CONFLICT (group_id) DO NOTHING`,
+        [input.groupId, input.expectedTotalFen, input.settledTotalFen, input.diffFen, input.now]
+      );
+    });
+  }
+
   /** 取消已支付订单（D007）：行锁下校验 open 与累计值充足后即扣 paid 容量/金额；条件更新防并发负数。 */
   async deductPaidForCancel(groupId: string, units: number, amountFen: number, goodsFen: number, now: Date, sessionTx: unknown): Promise<boolean> {
     return withExecutor(sessionTx as PgExecutor, async (client) => {

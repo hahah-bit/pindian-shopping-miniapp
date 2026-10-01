@@ -30,7 +30,7 @@ export interface RefundOrderPort {
 export class CreateFullRefundUseCase {
   constructor(private readonly deps: { refunds: RefundRepositoryPort; payments: PaymentRepository; clock: Clock }) {}
 
-  async execute(input: { paymentId: unknown; orderId: unknown; userId: unknown; reason: 'user_cancel' | 'group_failed' | 'late_payment' }): Promise<{ refundId: string }> {
+  async execute(input: { paymentId: unknown; orderId: unknown; userId: unknown; reason: 'user_cancel' | 'group_failed' | 'late_payment' }, sessionTx?: unknown): Promise<{ refundId: string }> {
     const paymentId = uuidOf(input.paymentId, '支付单 ID');
     const orderId = uuidOf(input.orderId, '订单 ID');
     const payment = await this.deps.payments.findById(paymentId);
@@ -51,7 +51,8 @@ export class CreateFullRefundUseCase {
       paymentId, orderId, userId: payment.state.userId,
       amountFen: payment.state.amountFen, reason: input.reason, now: this.deps.clock.now()
     });
-    await this.deps.refunds.insert(refund);
+    // sessionTx 贯穿：与外层事务（支付确认/取消已支付）同事务插入，回滚时不留孤立退款单（R4）
+    await this.deps.refunds.insert(refund, sessionTx);
     return { refundId: refund.state.refundId };
   }
 }
@@ -75,7 +76,7 @@ export class CancelPaidOrderWorkflow {
       }
       const existing = await this.deps.refunds.findByPaymentId(payment.state.paymentId);
       if (existing.length > 0) throw new ApplicationError('REFUND_NOT_ALLOWED', '退款已在处理中');
-      const { refundId } = await this.deps.creator.execute({ paymentId: payment.state.paymentId, orderId, userId, reason: 'user_cancel' });
+      const { refundId } = await this.deps.creator.execute({ paymentId: payment.state.paymentId, orderId, userId, reason: 'user_cancel' }, sessionTx);
       const deducted = await this.deps.groups.deductPaidForCancel(order.state.groupId, order.state.units, order.state.totalAmountFen, order.state.goodsAmountFen, this.deps.clock.now(), sessionTx);
       if (!deducted) throw new ApplicationError('ORDER_NOT_CANCELLABLE', '拼单已成功，请通过售后处理');
       const current = await this.deps.orders.findById(orderId);
@@ -169,13 +170,13 @@ export class RetryRefund {
 export class RefundResultConfirmer {
   constructor(private readonly deps: { refunds: RefundRepositoryPort; runner: { run<T>(work: (sessionTx: unknown) => Promise<T>): Promise<T> }; clock: Clock }) {}
 
-  async execute(input: { outRefundNo: unknown; result: 'SUCCESS' | 'ABNORMAL' | 'CLOSED' | 'PROCESSING'; source: 'callback' | 'query' }): Promise<string> {
+  async execute(input: { outRefundNo: unknown; result: 'SUCCESS' | 'ABNORMAL' | 'CLOSED' | 'PROCESSING'; source: 'callback' | 'query'; channelRefundId?: string }): Promise<string> {
     const outRefundNo = typeof input.outRefundNo === 'string' ? input.outRefundNo : '';
     const refund = await this.deps.refunds.findByOutRefundNo(outRefundNo);
     if (!refund) throw new ApplicationError('NOT_FOUND', '退款单不存在');
     const now = this.deps.clock.now();
     if (input.result === 'SUCCESS') {
-      const updated = refund.markSucceeded(now);
+      const updated = refund.markSucceeded(now, input.channelRefundId);
       await this.deps.refunds.save(updated);
       return 'succeeded';
     }

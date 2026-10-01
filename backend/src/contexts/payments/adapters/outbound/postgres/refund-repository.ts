@@ -50,9 +50,15 @@ export class PostgresRefundRepository implements RefundRepositoryPort {
     return withExecutor(this.pool, work);
   }
 
-  async insert(refund: Refund): Promise<void> {
+  /** 有外层事务时在会话上执行（与支付确认/取消流程同事务，R4）。 */
+  private async queryIn<T>(sessionTx: unknown, work: (client: PoolClient) => Promise<T>): Promise<T> {
+    if (sessionTx) return withExecutor(sessionTx as PgExecutor, work);
+    return this.query(work);
+  }
+
+  async insert(refund: Refund, sessionTx?: unknown): Promise<void> {
     const s = refund.state;
-    await this.query((client) => client.query(
+    await this.queryIn(sessionTx, (client) => client.query(
       `INSERT INTO refunds (${COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [s.refundId, s.paymentId, s.orderId, s.userId, s.outRefundNo, s.amountFen, s.status, s.reason, s.channelRefundId, s.failReason, s.retryCount, s.requestedAt, s.succeededAt, s.createdAt, s.updatedAt]
     ));
@@ -79,9 +85,9 @@ export class PostgresRefundRepository implements RefundRepositoryPort {
     });
   }
 
-  async save(refund: Refund): Promise<void> {
+  async save(refund: Refund, sessionTx?: unknown): Promise<void> {
     const s = refund.state;
-    await this.query((client) => client.query(
+    await this.queryIn(sessionTx, (client) => client.query(
       `UPDATE refunds SET status = $2, channel_refund_id = $3, fail_reason = $4, retry_count = $5, succeeded_at = $6, updated_at = $7 WHERE id = $1`,
       [s.refundId, s.status, s.channelRefundId, s.failReason, s.retryCount, s.succeededAt, s.updatedAt]
     ));

@@ -103,7 +103,7 @@ import { HttpWxPayAdapter } from '../contexts/payments/adapters/outbound/wechat/
 import { WxPayNotifyVerifier } from '../contexts/payments/adapters/outbound/wechat/wx-pay-notify-verifier';
 import { PostgresRefundRepository } from '../contexts/payments/adapters/outbound/postgres/refund-repository';
 import { ConfirmPaymentWorkflow } from '../workflows/payment-confirm.workflow';
-import { CreateFullRefundUseCase, CancelPaidOrderWorkflow, RetryRefund } from '../contexts/payments/application/refund-flow';
+import { CreateFullRefundUseCase, CancelPaidOrderWorkflow, RetryRefund, RefundResultConfirmer } from '../contexts/payments/application/refund-flow';
 import { MiniRefundQueries } from '../contexts/payments/application/mini-refund-views';
 import { AdminPayRefundQueries } from '../contexts/payments/application/admin-pay-refund-queries';
 import { contexts } from './context-registry';
@@ -285,15 +285,24 @@ import { TOKENS } from './injection-tokens';
       inject: ['ORDER_REPOSITORY', 'GROUP_REPOSITORY', 'PAYMENT_REPOSITORY', 'USER_OPENID_PORT', 'PAY_CHANNEL_PORT', TOKENS.PgPool, TOKENS.Clock, 'PAY_CHANNEL_PORT']
     },
     { provide: 'USER_OPENID_PORT', useFactory: (identities) => ({ getOpenid: async (userId: string) => { const r = await identities.findByUserId(userId); return r?.state.openid ?? null; } }), inject: ['WECHAT_IDENTITY_REPOSITORY'] },
-    { provide: PaymentQueryResult, useFactory: (payments, orders, payConfig) => new PaymentQueryResult({ payments, orders, payConfig }), inject: ['PAYMENT_REPOSITORY', 'ORDER_REPOSITORY', 'PAY_CONFIG'] },
-    { provide: 'NOTIFY_VERIFIER', useFactory: () => new WxPayNotifyVerifier({ configured: wxPayRuntime().configured, apiV3Key: wxPayRuntime().apiV3Key, mchid: wxPayRuntime().mchid }) },
+    { provide: PaymentQueryResult, useFactory: (payments, orders, payConfig, channel, confirm) => new PaymentQueryResult({ payments, orders, payConfig, channel, confirm }), inject: ['PAYMENT_REPOSITORY', 'ORDER_REPOSITORY', 'PAY_CONFIG', 'PAY_CHANNEL_PORT', 'PAYMENT_CONFIRM_WORKFLOW'] },
+    { provide: 'NOTIFY_VERIFIER', useFactory: () => new WxPayNotifyVerifier({ configured: wxPayRuntime().configured, apiV3Key: wxPayRuntime().apiV3Key, mchid: wxPayRuntime().mchid, platformPublicKeyPath: wxPayRuntime().platformPublicKeyPath }) },
+    {
+      provide: 'PAYMENT_CONFIRM_WORKFLOW',
+      useFactory: (payments, groups, reservations, orders, stocks, refunds, pool: Pool, clock) =>
+        new ConfirmPaymentWorkflow({ groups, reservations, orders, payments, refunds: { createFullRefund: (i, tx) => refunds.execute(i, tx) }, stocks, runner: new PostgresTransactionRunner(pool), clock }),
+      inject: ['PAYMENT_REPOSITORY', 'GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'ORDER_REPOSITORY', 'STOCK_RESERVATION_PORT', 'REFUND_CREATOR', TOKENS.PgPool, TOKENS.Clock]
+    },
     {
       provide: 'NOTIFY_APPLIER',
-      useFactory: (payments, groups, reservations, orders, stocks, refunds, pool: Pool, clock) => {
-        const confirm = new ConfirmPaymentWorkflow({ groups, reservations, orders, payments, refunds: { createFullRefund: (i) => refunds.execute(i) }, stocks, runner: new PostgresTransactionRunner(pool), clock });
-        return { apply: async (fact: { outTradeNo: string; channelTransactionId: string; payerTotal: number; payload: Record<string, unknown> }) => confirm.execute({ channelFact: fact, source: 'callback' }) };
+      useFactory: (confirm, refundRepo, pool: Pool, clock) => {
+        const refundConfirmer = new RefundResultConfirmer({ refunds: refundRepo, runner: new PostgresTransactionRunner(pool), clock });
+        return {
+          apply: async (fact: { outTradeNo: string; channelTransactionId: string; payerTotal: number; payload: Record<string, unknown> }) => confirm.execute({ channelFact: fact, source: 'callback' }),
+          applyRefund: async (fact: { outRefundNo: string; result: 'SUCCESS' | 'ABNORMAL' | 'CLOSED' | 'PROCESSING'; channelRefundId?: string }) => refundConfirmer.execute({ ...fact, source: 'callback' })
+        };
       },
-      inject: ['PAYMENT_REPOSITORY', 'GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'ORDER_REPOSITORY', 'STOCK_RESERVATION_PORT', 'REFUND_CREATOR', TOKENS.PgPool, TOKENS.Clock]
+      inject: ['PAYMENT_CONFIRM_WORKFLOW', 'REFUND_REPOSITORY', TOKENS.PgPool, TOKENS.Clock]
     },
     { provide: 'REFUND_CREATOR', useFactory: (refunds, payments, clock) => new CreateFullRefundUseCase({ refunds, payments, clock }), inject: ['REFUND_REPOSITORY', 'PAYMENT_REPOSITORY', TOKENS.Clock] },
     { provide: MiniRefundQueries, useFactory: (payments, refunds) => new MiniRefundQueries({ payments, refunds }), inject: ['PAYMENT_REPOSITORY', 'REFUND_REPOSITORY'] },
@@ -327,6 +336,7 @@ function wxPayRuntime() {
     appid: c.wxAppid,
     apiV3Key: c.wxPayApiV3Key,
     privateKeyPath: c.wxPayPrivateKeyPath,
+    platformPublicKeyPath: c.wxPayPlatformPublicKeyPath,
     serialNo: c.wxPaySerialNo,
     notifyUrl: c.wxPayNotifyUrl,
     endpointBase: c.wxPayEndpointBase ?? undefined

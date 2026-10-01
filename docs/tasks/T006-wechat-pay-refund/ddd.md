@@ -263,3 +263,34 @@ sequenceDiagram
 `PaymentChannelPort`：`createJsapiOrder({outTradeNo, amountFen, openid, description, notifyUrl})` → `{prepayId}`；`queryOrderByOutTradeNo(outTradeNo)` → `{tradeState, transactionId?, payerTotal?}`；`closeOrder(outTradeNo)`；`submitRefund({outTradeNo, outRefundNo, refundFen, totalFen, reason})`；`queryRefund(outRefundNo)`；`verifyNotifySignature(headers, rawBody)` → `{valid, decrypted?}`。
 配置端口 `PayConfigPort`：mchid/appid/serialNo/私钥/APIv3 密钥/notifyUrl——缺失时渠道端口进入"未配置"状态，发起支付返回 503 `WECHAT_PAY_NOT_CONFIGURED`。
 测试替身 `FakePaymentChannelPort` 仅在测试装配注入。
+
+## 8. 复验修订（2026-10-01，独立验收 A01–A05）
+
+### 8.1 回调验签为安全不变量（A01）
+
+- 平台验签（Wechatpay-Signature，串 = `timestamp
+nonce
+原始报文
+`，SHA256-RSA，密钥 = 平台证书/微信支付公钥）是回调可信的**前置不变量**：未配置平台公钥或签名缺失/不合法时，整个回调必须拒绝，不得进入解密与应用。
+- 解密（APIv3 AES-256-GCM）只提供机密性与内容认证，不提供发送方身份——二者缺一不可（官方文档：回调验签指引，pay.weixin.qq.com，核验 2026-10-01）。
+- 验签必须作用于**原始请求字节**：入口保留 rawBody，禁止"解析后再序列化"（空白/键序差异会破坏签名）。
+
+### 8.2 组截止失败 → 全额退款（A02）
+
+- 组 failed 是组生命周期终态；组内**已支付订单**的应付清偿事实归 Payments：为每笔 paid 订单创建 `group_failed` 全额退款（每支付单至多一笔，`refunds.payment_id` 唯一约束兜底）。
+- 事务边界：组失效+库存释放一个事务；退款建单逐单独立事务（幂等重扫）。任务每轮扫描 `failed 组内 paid 且无退款单` 的订单——部分失败与崩溃后由下一轮恢复，不依赖内存状态。
+
+### 8.3 迟到支付退款的事务性（A03）
+
+- "支付事实 succeeded + applied_result=refunded_not_applied"与"退款单创建"必须**同事务**：退款建单失败 → 整体回滚 → 支付单停留 processing/unknown → 回调/查询补偿重放。不允许出现 succeeded-but-无退款 的永久态。
+- 退款插入贯穿 sessionTx（`refunds.insert(refund, sessionTx)`），已支付取消同事务语义由此成立（故障注入验证回滚一致性）。
+
+### 8.4 平台让利台账（A05，D006）
+
+- 值对象：结算台账 GroupSettlement（事实记录，不可变）：`group_id`（唯一）、`expected_total_fen`（组售价快照 = 商品金额 + 服务费 500 分）、`settled_total_fen`（组成功时 Σ 已支付订单应付）、`diff_fen` = expected − settled（≥0 为平台让利；<0 视为异常，记录原始值）。
+- 记录时机：组状态迁移 success 的同一事务（幂等：group_id 冲突跳过）。迁移 0015。
+
+### 8.5 退款回调与刷新语义
+
+- 退款结果通知与支付通知共用 `POST /api/payments/v1/notify`，按 `event_type` 分发：TRANSACTION.SUCCESS → 支付确认；REFUND.SUCCESS/ABNORMAL/CLOSED → RefundResultConfirmer（渠道证据）。验签解密要求与 8.1 相同（官方：退款结果通知，核验 2026-10-01）。
+- 前端"刷新支付结果"= 后端主动渠道查单：payment 处于 processing/unknown 时查询渠道并走确认流程，再返回订单投影；支付已成功则直接返回本地事实。

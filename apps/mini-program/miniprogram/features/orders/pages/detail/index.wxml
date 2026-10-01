@@ -43,6 +43,11 @@
       <view class="hint">地址后续修改不影响本订单。</view>
     </view>
 
+    <view wx:if="{{refundLoadError}}" class="card">
+      <view class="section-title">退款进度</view>
+      <view class="state error-state"><text>退款进度加载失败</text><button bindtap="retryRefunds" type="button">重试</button></view>
+    </view>
+
     <view wx:if="{{refundItems.length}}" class="card">
       <view class="section-title">退款进度</view>
       <view wx:for="{{refundItems}}" wx:key="id" class="refund-row">

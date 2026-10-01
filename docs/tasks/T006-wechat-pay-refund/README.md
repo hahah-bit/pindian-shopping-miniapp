@@ -7,7 +7,7 @@
 - 授权：用户已授权 T006 全部范围（设计/实现/自测/修复/本地提交）。
 - 修改范围：`backend/src/contexts/payments`、`ordering`、`group-buying`、`workflows`、`bootstrap`、`worker`、`migrations/0011..0014`、`contracts`、`apps/mini-program`（支付/退款页）、`apps/admin-web`（支付退款查询）、`tests`、文档。
 - 前置功能：T002/T003/T004（均已完成自测，74438ab）。
-- 当前状态：已完成（开发完成、自测通过、未独立最终验收；Docker 运行时与 DB 集成已验证；真实商户渠道验证待用户配置——见 verification.md）。
+- 当前状态：验证中（2026-10-01 独立验收未通过；现有专项、全量与 Docker 冒烟通过，但仍存在回调验签、拼单失败退款、退款恢复及页面展示缺口，见 [独立验收](independent-acceptance.md)）。
 - 阻塞项：**真实商户配置缺失**（WX_APPID 留空、无 mchid/商户私钥/APIv3 密钥/证书序列号）→ 真实渠道调用不可执行；实现为可配置端口 + 缺配置明确报错，不伪造渠道成功。
 
 文档：[DDD](ddd.md)、[spec](spec.md)、[plan](plan.md)、[实际验收](verification.md)、[决策记录](decisions/)（D006–D010 已确认）。

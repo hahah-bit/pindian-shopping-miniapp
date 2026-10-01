@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { randomUUID } from 'node:crypto';
 import { FoundationModule } from './foundation.module';
 import { HttpErrorFilter } from './http-error.filter';
@@ -7,7 +8,7 @@ import { readConfig } from './config';
 
 async function main(): Promise<void> {
   const config = readConfig();
-  const app = await NestFactory.create(FoundationModule);
+  const app = await NestFactory.create<NestExpressApplication>(FoundationModule, { rawBody: true });
   app.setGlobalPrefix('api');
   app.use((request: { headers: Record<string, unknown>; requestId: string }, response: { setHeader: (key: string, value: string) => void }, next: () => void) => {
     const supplied = request.headers['x-request-id'];

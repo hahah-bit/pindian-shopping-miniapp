@@ -11,6 +11,8 @@ export interface ConfirmPaymentDeps {
     findByIdForUpdate(groupId: string, sessionTx: unknown): Promise<Group | null>;
     findById(groupId: string): Promise<Group | null>;
     save(group: Group, sessionTx?: unknown): Promise<void>;
+    /** D006 让利台账：组成功同事务落账（幂等）。 */
+    recordSettlement(input: { groupId: string; expectedTotalFen: number; settledTotalFen: number; diffFen: number; now: Date }, sessionTx?: unknown): Promise<void>;
   };
   reservations: {
     findByOrderId(orderId: string): Promise<ShareReservation | null>;
@@ -69,6 +71,8 @@ export class ConfirmPaymentWorkflow {
 
     const succeeded = payment.markSucceeded({ channelTransactionId: fact.channelTransactionId, source: input.source, payload: fact.payload, now });
 
+    // A03（复验）：应用、支付事实、迟到退款在**同一事务**——退款建单失败整体回滚，
+    // 支付单停留原态可由重放恢复；提交后重放被 succeeded 早退挡住，不会重复退款。
     const outcome = await this.deps.runner.run(async (sessionTx) => {
       const lockedOrder = await this.deps.orders.findById(fact.outTradeNo);
       if (!lockedOrder) return { applied: false, reason: 'missing' as const };
@@ -90,24 +94,34 @@ export class ConfirmPaymentWorkflow {
       await this.deps.reservations.save(converted, sessionTx);
       await this.deps.groups.save(finalGroup, sessionTx);
       await this.deps.orders.save(paidOrder, sessionTx);
+      await this.deps.payments.save(succeeded.markAppliedResult('applied'), sessionTx);
       if (finalGroup.state.status === 'success') {
         await this.deps.stocks.consumeOne(finalGroup.state.productId, `group-consume:${finalGroup.state.groupId}`);
+        // D006 让利台账：expected = 组售价快照（原价+服务费）；settled = 组累计已支付；diff 可追溯
+        await this.deps.groups.recordSettlement({
+          groupId: finalGroup.state.groupId,
+          expectedTotalFen: finalGroup.state.snapshot.userWholePriceFen,
+          settledTotalFen: finalGroup.state.paidAmountFen,
+          diffFen: finalGroup.state.snapshot.userWholePriceFen - finalGroup.state.paidAmountFen,
+          now
+        }, sessionTx);
       }
       return { applied: true, reason: 'ok' as const };
     });
 
-    await this.deps.payments.save(succeeded.markAppliedResult(outcome.applied ? 'applied' : 'refunded_not_applied'));
+    if (outcome.applied) return outcome.applied;
 
-    if (!outcome.applied) {
-      // D008：迟到/不可生效支付 → 全额自动退款（原因 late_payment）
+    // D008：迟到/不可生效支付 → 支付事实与全额退款（late_payment）同事务；退款失败整体回滚可重放
+    await this.deps.runner.run(async (sessionTx) => {
+      await this.deps.payments.save(succeeded.markAppliedResult('refunded_not_applied'), sessionTx);
       await this.deps.refunds.createFullRefund({
         paymentId: succeeded.state.paymentId,
         orderId: fact.outTradeNo,
         userId: order.state.userId,
         amountFen: order.state.totalAmountFen,
         reason: 'late_payment'
-      });
-    }
+      }, sessionTx);
+    });
     return outcome.applied;
   }
 }

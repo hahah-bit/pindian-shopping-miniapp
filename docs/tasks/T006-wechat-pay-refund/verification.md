@@ -1,67 +1,45 @@
 # T006 实际验收记录
 
-日期：2026-10-01（Asia/Shanghai）。结论：**T006 范围内能力"开发完成、自测通过、未独立最终验收"**。支付/退款的领域规则、渠道端口、回调验签解密、Worker 五任务、两端页面全部实现；专项 35/35、全量 154/154（0 跳过，DB 集成含在内）、Docker 冒烟通过。**真实微信商户渠道验证因无商户配置未执行**（见文末），不将支付闭环标记为"渠道已验证"。
+> 2026-10-01 独立验收结论：未通过（见 [independent-acceptance.md](independent-acceptance.md)）。同日按其缺口清单完成修复复验（本记录第二轮），全部缺口已修复并以先红后绿回归 + 真实 PG/HTTP 集成覆盖；**独立复验由验收方执行，本记录为开发自测**。
+
+日期：2026-10-01（Asia/Shanghai）。第二轮：针对独立验收 A01–A05 及附加验证项（事务边界/退款回调/刷新语义）逐项修复。结论：**修复完成、自测通过；真实商户渠道与真机仍待用户环境，不标记渠道已验证**。
+
+## 修复对照（独立验收缺口 → 修复与验证）
+
+| 缺口 | 修复 | 验证（先红后绿） |
+| --- | --- | --- |
+| A01 生产回调未验签 | `WxPayNotifyVerifier` 强制平台公钥 RSA 验签（串 = `timestamp\nnonce\n原始报文\n`）：未配置公钥/缺任一头/错签名/超窗（>5min）一律拒绝；控制器改用 Nest `rawBody` 原始字节验签，缺失即 400；验签通过才解密 | notify-verify 单测 6/6（合法/缺公钥/缺头×4/错私钥/报文不匹配/空白报文原文验签/超窗/退款事件/mchid 不匹配/篡改/非法 JSON）；集成场景 0：无签名 400、错私钥 400、**重新序列化报文 400**、原文（含空白）验签 200 |
+| A02 组截止不退款 | `FailDeadlineGroupsTask` 第二阶段：扫描 failed 组内 paid 且无退款单订单 → 逐单独立事务建 `group_failed` 全额退款；已有退款不重建（查重+`refunds.payment_id` 唯一约束）；单笔失败不阻塞、下轮重扫恢复 | group-failure-refund 单测 4/4（建单/幂等/部分失败重扫补齐/无 paid 不建）；集成场景 4：组2 截止 → 组 failed + 退款 requested（12625 分全额），重复执行不重复 |
+| A03 迟到退款不可恢复 | 确认工作流事务化：应用/支付事实/迟到退款**同一事务**（含防崩溃窗口：applied 路径的支付事实也入事务）；退款建单失败整体回滚，支付单停留原态可重放；`RefundCreationPort`/`CreateFullRefundUseCase` 贯穿 sessionTx | payment-confirm 单测 10/10（新增：建单失败回滚不落 succeeded + 重放恰一笔退款；同事务会话断言）；集成场景 2 迟到支付全链路保持通过 |
+| 事务边界（附加验证） | `PostgresRefundRepository.insert/save` 接收 sessionTx；取消已支付工作流传递 sessionTx | **真实 PG 故障注入**（集成场景 3）：取消流程组扣减步骤注入失败 → 退款单回滚（无孤立退款单）、订单保持 paid、组容量未扣；随后真实取消成功 |
+| A04 退款进度被清空 | 小程序 loadRefunds：cancelled/expired 同样查询展示；查询失败显式提示 + 重试按钮，与"无退款记录"区分 | 代码实现 + admin/mini 构建通过；页面行为（开发者工具/真机）待用户环境，已如实记录 |
+| A05 让利台账缺失 | 迁移 0015 `group_settlements`（group_id 唯一幂等）；组 success 同事务落账 expected（整件售价快照）/settled（Σ已支付订单应付）/diff（让利）；组截止失败不落账 | payment-confirm 单测（落账字段+同事务+未满不落账）；集成场景 1：20×20×20 → expected 50500 / settled 50499 / **diff 1 可追溯**；场景 5：仅 success 组有台账 |
+| 退款回调缺失（附加） | notify 按 event_type 分发：TRANSACTION.* → 支付确认；REFUND.SUCCESS/ABNORMAL/CLOSED → `RefundResultConfirmer`（渠道退款单号随证据落库）；未知类型受理不处理 | 集成场景 2/3：退款回调（真实签名+加密，AAD=refund）→ succeeded 且 channel_refund_id 落库（wxr-cb-1/wxr-cb-2）；notify-verify 单测覆盖 REFUND.SUCCESS 解密 |
+| 刷新≠查单（附加） | `PaymentQueryResult` 在 payment 处于 processing/unknown 时主动渠道查单并走确认流程；已成功不查渠道；查询失败返回本地事实（补偿任务兜底） | payment-refresh 单测 3/3；集成场景 1：processing 单刷新 → 官方查单路径 → applied/paid；已支付刷新不再访问渠道 |
+
+## 官方文档核验（2026-10-01）
+
+- 回调验签（Wechatpay-Signature 等四头、验签串构造、平台证书/微信支付公钥、必须原始报文、200/204 应答）：pay.weixin.qq.com/docs/merchant/development/interface-rules/signature-verification.html
+- 退款结果通知（notify_url 随申请退款下发；REFUND.SUCCESS/ABNORMAL/CLOSED；resource 解密含 out_refund_no/refund_status/refund_id）：pay.weixin.qq.com/doc/v3/merchant/4012647469、pay.weixin.qq.com/doc/v3/merchant/4012791906
+- 申请退款（out_refund_no 唯一幂等；状态 SUCCESS/CLOSED/PROCESSING/ABNORMAL）：pay.weixin.qq.com/doc/v3/merchant/4013071036
 
 ## 已确认决策
 
-D006 标准价+平台让利台账；D007 先到先得+申请即扣容量；D008 迟到支付全额自动退款；D009 五态退款+out_refund_no 幂等；D010 单 Worker 五任务。均为 2026-10-01 用户选定（见 decisions/）。
+D006 标准价+平台让利台账；D007 先到先得+申请即扣容量；D008 迟到支付全额自动退款；D009 五态退款+out_refund_no 幂等；D010 单 Worker 五任务。均为 2026-10-01 用户选定（见 decisions/）。本轮台账为 D006 的落地实现。
 
-## 单元测试（先红后绿）
+## 测试与冒烟结果（2026-10-01 第二轮）
 
-`npm run test:task:t006` → **35/35，0 跳过**（单元 34 + 集成 1）。
-
-| 文件 | 结果 | 覆盖 |
-| --- | --- | --- |
-| payment-initiate.test.mjs | 7/7 | 金额同源快照、prepay 2h 幂等、越权 404、不可支付三态、未配置 503、外部超时 unknown、同号已用恢复 |
-| payment-confirm.test.mjs | 7/7 | 预占转换+组金额、组满 success+整件消耗、重复通知幂等、金额不符 pending_review、迟到支付退款、组成功后迟到退款、预占过期兜底退款 |
-| refund-flow.test.mjs | 8/8 | 取消已支付（容量即扣+requested+cancelled）、组成功后拒绝、驱动 submitted→processing、**提交异常落 failed（不无限静默重试）**、**人工重试重置 requested 且 retryCount+1**、回调确认 succeeded、累计上限、人工重试+审计 |
-| payment-tasks.test.mjs | 5/5 | 查询补偿确认、NOTPAY 等待、退避阈值、退款驱动接线、异常统计 |
-| notify-verify.test.mjs | 2/2 | APIv3 AES-256-GCM 解密出支付事实、篡改/非法 JSON/缺 resource 拒绝 |
-| wx-pay-adapter.test.mjs | 5/5 | WECHATPAY2-SHA256-RSA2048 Authorization 官方格式+RSA 验签、paySign 可验签、未配置全方法显式报错、回调平台私钥验签、AES-256-GCM 解密 |
-
-修复记录（TDD 先红后绿）：退款驱动提交异常原实现仅记日志（单据滞留 requested、永不进入异常队列）→ 先写失败测试再修复为落 failed；人工重试原实现置 submitted 但驱动只提交 requested（死胡同）→ 领域新增 `markRetryRequested`（failed→requested，retryCount+1），由驱动按幂等键 out_refund_no 重提。
-
-## 集成测试（真实 PostgreSQL + 真实 HTTP API + 本地假微信渠道服务）
-
-`tests/task-suites/t006/integration-db-http.test.mjs` → **1/1 通过**。生产装配（FoundationModule 全量 DI + HttpWxPayAdapter 经 `WX_PAY_ENDPOINT_BASE` 指向本地假渠道）+ 独立测试库 `pindian_t006_test`（不触碰主库）。覆盖：
-
-1. 三笔 1/3 支付生效：真实适配器下单 → 回调（真实 AES-256-GCM 报文）→ 预占转换 → 组满 60 → 组 success + 整件消耗；Σ已支付订单金额 = 组金额累计（50499 ≤ 50500，让利 1 分走 D006 台账）。
-2. 重复通知幂等：同事实重投 → 200，容量/金额不重复计。
-3. 金额不符 → `pending_review` 异常队列；后台 `payment-anomalies` 计数可见。
-4. 迟到支付（预占过期任务后回调）→ `refunded_not_applied` + D008 全额自动退款（late_payment）→ 退款驱动 processing → 渠道查询 SUCCESS → succeeded；小程序退款进度端点本人可见、他人 404。
-5. 已支付取消（D007 容量即扣）→ 渠道提交失败 → failed（fail_reason=SYSTEM_ERROR）→ 管理员重试（401 未登录/401 用户 token 鉴权独立成立）→ 重置 requested + retryCount+1 → 驱动重提 → 到账；操作审计落库。
-6. 金额与库存一致性断言贯穿全程（stocks available/reserved 逐步校验）。
-
-集成测试发现并修复的生产缺陷（修复后专项→全量重验）：
-
-| 缺陷 | 修复 |
+| 验证 | 结果 |
 | --- | --- |
-| payments INSERT 15 占位符/15 参数对 14 列（支付单创建必 500） | 列数对齐 14 |
-| InitiatePayment 被注入订单聚合而非扁平投影，归属判断恒 NOT_FOUND | 装配层聚合→端口投影 |
-| NOTIFY_APPLIER 包装调用不存在的方法名（迟到退款链路断裂） | `refunds.execute(i)` |
-| consumeOne 台账 delta=0 违反迁移 0005 CHECK（组满消耗必 500） | 迁移 0014：CHECK 放宽为有界区间（-100000..100000），保留初始调整 ±N |
-| `deductPaidForCancel` 端口声明但 Postgres 适配器未实现 | PostgresGroupRepository 实现行锁+条件更新 |
-| 取消端点未分发已支付取消（409） | 控制器按订单状态分发未支付/已支付工作流 |
-| 500 无服务端日志 | 过滤器对 ≥500 打印异常（不泄露客户端） |
-
-## 全量测试（含 T002–T004 回归）
-
-`npm test`（typecheck + build + 架构检查 + 全部测试）→ **154/154 通过，0 失败，0 跳过**。此前 4 项跳过的 DB 集成测试（T002/T003/T004/T006）在 Docker 恢复后全部实跑通过。
-
-## Docker 冒烟（2026-10-01）
-
-| 项 | 结果 |
-| --- | --- |
-| `docker compose build` + `up -d --force-recreate` | ✅ 4 容器（postgres/api/worker/admin）全部 healthy |
-| 主库迁移 | ✅ schema_migrations 0001–0014 全应用；`stock_movements_delta_check` 为修正后约束 |
-| Worker 五任务 | ✅ 日志"业务任务循环启动：预占过期 / 组截止 / 支付查询补偿 / 退款驱动 / 异常统计"；health.json `businessTasksEnabled: true` |
-| API | ✅ `/api/health/ready` 200；新路由 `POST /api/admin/v1/refunds/:id/retry` 未认证返回 401（路由与鉴权在部署镜像中生效） |
-| 后台前端 | ✅ `http://127.0.0.1:8080` 200（含支付与退款页 F025，构建通过） |
-| 后台支付/退款页浏览器交互冒烟 | ✅ 页面构建与路由可达（真实商户数据为空属预期） |
+| 专项 `npm run test:task:t006` | **49/49，0 跳过**（notify-verify 6、confirm 10、refund-flow 8、group-failure-refund 4、payment-refresh 3、initiate 7、tasks 5、adapter 5 + 真实 PG+HTTP+本地渠道集成 1；集成覆盖 A01/A02/A03/A05/退款回调/故障注入/刷新查单） |
+| 全量 `npm test`（typecheck+build+架构检查+全部测试） | **168/168，0 失败 0 跳过**（T001/T002/T003/T004 回归实跑通过） |
+| Docker 冒烟 | `compose build` + 重建后 4 容器 healthy；主库迁移 0001–**0015**；Worker 五任务运行（health `businessTasksEnabled:true`）；无签名回调 400（强制验签在部署镜像生效）；API ready 200 |
+| 后台浏览器交互冒烟 | 登录 → "支付与退款"页（支付单/退款单/异常队列三标签、状态筛选、空态）→ 异常队列计数与刷新按钮；F025 在部署环境可交互 |
+| 小程序 | F024 实现退款进度扩展（cancelled/expired）+ 查询失败重试；**微信开发者工具/真机验证待用户环境** |
 
 ## 未验证与待用户处理
 
-1. **真实微信渠道**：无商户配置（mchid/APIv3 密钥/商户证书与序列号/平台证书），真实下单→支付→回调→退款无法验证。当前未配置时全部方法显式报 `WECHAT_PAY_NOT_CONFIGURED`，无任何"模拟成功"路径。配置后：.env 填 WX_PAY_MCHID / WX_PAY_APIV3_KEY / WX_PAY_SERIAL_NO / WX_PAY_PRIVATE_KEY_PATH（可选 WX_PAY_ENDPOINT_BASE 仅限联调指向本地假渠道，生产勿设）。
-2. **平台证书/公钥验签**：回调当前以 APIv3 密钥解密 + mchid 核验认证；平台证书 RSA 验签待商户配置后启用（wx-pay-notify-verifier 已注明）。
-3. **微信开发者工具/真机**：小程序支付调起（wx.requestPayment）与退款进度展示需真机环境。
-4. 独立最终验收由另一位 Agent 负责；本记录仅为开发自测。
+1. **真实微信渠道**：无商户配置（mchid/APIv3 密钥/商户私钥/平台公钥）。当前生产回调在未配置平台公钥时**一律拒绝**（安全默认）；配置 WX_PAY_MCHID / WX_PAY_APIV3_KEY / WX_PAY_SERIAL_NO / WX_PAY_PRIVATE_KEY_PATH / **WX_PAY_PLATFORM_PUBLIC_KEY_PATH** 后链路方可验证。`WX_PAY_ENDPOINT_BASE` 仅限联调指向本地假渠道，生产勿设。
+2. 平台证书/公钥轮换与多序列号：当前按配置的单公钥验签；多序列号轮换待商户环境确定后扩展（Wechatpay-Serial 已随回调头留存）。
+3. 小程序真机：wx.requestPayment 调起、cancelled/expirmed 退款进度展示、取消并退款确认框。
+4. 独立复验由验收方执行；本记录为开发自测。

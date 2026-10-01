@@ -11,6 +11,8 @@ export interface RuntimeConfig {
   wxPayApiV3Key: string | null;
   wxPaySerialNo: string | null;
   wxPayPrivateKeyPath: string | null;
+  /** 平台公钥/微信支付公钥 PEM 路径（回调强制验签；未配置则回调全部拒绝）。 */
+  wxPayPlatformPublicKeyPath: string | null;
   wxPayNotifyUrl: string;
   /** 覆盖渠道 API 域名（仅联调/测试注入本地假渠道；默认官方域名）。 */
   wxPayEndpointBase: string | null;
@@ -60,6 +62,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig 
     wxPayApiV3Key: env.WX_PAY_APIV3_KEY?.trim() || null,
     wxPaySerialNo: env.WX_PAY_SERIAL_NO?.trim() || null,
     wxPayPrivateKeyPath: env.WX_PAY_PRIVATE_KEY_PATH?.trim() || null,
+    wxPayPlatformPublicKeyPath: env.WX_PAY_PLATFORM_PUBLIC_KEY_PATH?.trim() || null,
     wxPayNotifyUrl: env.WX_PAY_NOTIFY_URL?.trim() || 'http://localhost:3000/api/payments/v1/notify',
     wxPayEndpointBase: env.WX_PAY_ENDPOINT_BASE?.trim() || null
   };

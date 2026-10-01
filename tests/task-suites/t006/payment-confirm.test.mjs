@@ -68,10 +68,11 @@ class FakeReservationRepository {
   async listByGroup() { return this.r ? [this.r] : []; }
 }
 class FakeGroupRepository {
-  constructor(g) { this.g = g; this.consumed = []; }
+  constructor(g) { this.g = g; this.consumed = []; this.settlements = []; }
   async findByIdForUpdate() { return this.g; }
   async findById() { return this.g; }
   async save(g) { this.g = g; }
+  async recordSettlement(input, sessionTx) { this.settlements.push({ ...input, sessionTx }); }
   async findCandidates() { return []; }
   async insert() {}
   async findExpiredOpenGroups() { return []; }
@@ -85,8 +86,37 @@ class FakeStockPort {
   async releaseOne() {}
 }
 class FakeRefundCreator {
-  constructor() { this.created = []; }
-  async createFullRefund(input) { this.created.push(input); return { refundId: 'rf-1' }; }
+  constructor() { this.created = []; this.failNext = null; this.lastSessionTx = undefined; }
+  async createFullRefund(input, sessionTx) {
+    if (this.failNext) { const e = this.failNext; this.failNext = null; throw e; }
+    this.lastSessionTx = sessionTx;
+    this.created.push(input);
+    return { refundId: `rf-${this.created.length}` };
+  }
+}
+
+/** 带回滚语义的假事务：work 抛出时把仓储恢复到事务前状态（模拟真实 DB 回滚）。 */
+class RollbackRunner {
+  constructor(repos) { this.repos = repos; this.lastSessionTx = undefined; }
+  async run(work) {
+    const snapP = this.repos.payments.p;
+    const snapRefunds = [...this.repos.refunds.created];
+    const snapG = this.repos.groups.g;
+    const snapOrder = this.repos.orders.order;
+    const snapR = this.repos.reservations.r;
+    const sessionTx = { tx: `s-${this.repos.txSeq = (this.repos.txSeq ?? 0) + 1}` };
+    this.lastSessionTx = sessionTx;
+    try {
+      return await work(sessionTx);
+    } catch (error) {
+      this.repos.payments.p = snapP;
+      this.repos.refunds.created = snapRefunds;
+      this.repos.groups.g = snapG;
+      this.repos.orders.order = snapOrder;
+      this.repos.reservations.r = snapR;
+      throw error;
+    }
+  }
 }
 
 function build(overrides = {}) {
@@ -100,11 +130,13 @@ function build(overrides = {}) {
   const payments = new FakePaymentRepository(payment);
   const refunds = new FakeRefundCreator();
   const stocks = new FakeStockPort();
+  const repos = { groups, reservations, orders, payments, refunds, stocks };
+  const runner = overrides.rollbackRunner ? new RollbackRunner(repos) : new InlineRunner();
   const workflow = new ConfirmPaymentWorkflow({
     groups, reservations, orders, payments, refunds, stocks,
-    runner: new InlineRunner(), clock: new FakeClock()
+    runner, clock: new FakeClock()
   });
-  return { groups, reservations, orders, payments, refunds, stocks, workflow, group, order, payment };
+  return { groups, reservations, orders, payments, refunds, stocks, workflow, group, order, payment, runner, repos };
 }
 
 const SUCCESS = { outTradeNo: ORDER, channelTransactionId: 'ch-tx-1', payerTotal: 16833, payload: { mock: true } };
@@ -128,11 +160,27 @@ test('组满判定：支付使 paid 恰为 60 → 组 success + 整件消耗（G
   const { workflow, groups, stocks } = build({ group: makeGroup(40, 20) });
   const applied = await workflow.execute({ channelFact: SUCCESS, source: 'query' });
   const g = (await groups.findById(GROUP)).state;
-  
+
   assert.equal(applied, true);
   assert.equal(g.paidUnits, 60);
   assert.equal(g.status, 'success', '恰好 60 才成功');
   assert.deepEqual(stocks.consumed, [`group-consume:${GROUP}`], '组成功消耗整件');
+});
+
+test('D006 让利台账：组成功同事务落账 expected/settled/diff；未满不落账（A05）', async () => {
+  const success = build({ group: makeGroup(40, 20) });
+  await success.workflow.execute({ channelFact: SUCCESS, source: 'query' });
+  assert.equal(success.groups.settlements.length, 1, '组成功落账一次');
+  const entry = success.groups.settlements[0];
+  assert.equal(entry.groupId, GROUP);
+  assert.equal(entry.expectedTotalFen, 50500, '整件售价快照 = 原价 50000 + 服务费 500');
+  assert.equal(entry.settledTotalFen, 16833, '组累计已支付金额');
+  assert.equal(entry.diffFen, 50500 - 16833, 'diff = expected - settled（让利可追溯）');
+  assert.ok(entry.sessionTx, '落账在事务会话内');
+
+  const unpaid = build();
+  await unpaid.workflow.execute({ channelFact: SUCCESS, source: 'query' });
+  assert.deepEqual(unpaid.groups.settlements, [], '未满组不落账');
 });
 
 test('重复通知：已应用过直接幂等返回，不重复占容量（G3）', async () => {
@@ -162,6 +210,33 @@ test('迟到支付：订单已过期 → 事实入库 + 全额自动退款（G6/
   assert.deepEqual(refunds.created.map((r) => r.reason), ['late_payment']);
   assert.equal(refunds.created[0].amountFen, 16833, '全额退款');
   assert.equal((await orders.findById(ORDER)).state.status, 'expired', '订单保持 expired');
+});
+
+test('迟到支付退款建单失败 → 事务回滚支付单不落 succeeded；重放恢复恰好一笔退款（A03）', async () => {
+  const expiredOrder = makeOrder().markExpired(NOW);
+  const { workflow, refunds, payments } = build({ order: expiredOrder, rollbackRunner: true });
+  refunds.failNext = new Error('注入：退款建单失败');
+  await assert.rejects(
+    () => workflow.execute({ channelFact: SUCCESS, source: 'callback' }),
+    /退款建单失败/
+  );
+  const afterFailure = (await payments.findByOrderId(ORDER)).state;
+  assert.notEqual(afterFailure.status, 'succeeded', '回滚：支付事实与退款同事务，退款失败不得落 succeeded');
+  // 故障恢复后重放同一支付事实 → 重建退款（重放不再被 succeeded 早退挡住）
+  const replay = await workflow.execute({ channelFact: SUCCESS, source: 'callback' });
+  assert.equal(replay, false);
+  assert.deepEqual(refunds.created.map((r) => r.reason), ['late_payment'], '恢复后恰好一笔退款');
+  assert.equal((await payments.findByOrderId(ORDER)).state.appliedResult, 'refunded_not_applied');
+  assert.ok(refunds.lastSessionTx, '退款建单收到 sessionTx');
+});
+
+test('迟到支付：支付事实保存与退款建单在同一事务（A03 事务边界）', async () => {
+  const expiredOrder = makeOrder().markExpired(NOW);
+  const { workflow, refunds, runner, payments } = build({ order: expiredOrder, rollbackRunner: true });
+  await workflow.execute({ channelFact: SUCCESS, source: 'callback' });
+  assert.ok(runner.lastSessionTx, '经过事务运行器');
+  assert.equal(refunds.lastSessionTx, runner.lastSessionTx, '退款建单在事务会话内');
+  assert.equal((await payments.findByOrderId(ORDER)).state.appliedResult, 'refunded_not_applied');
 });
 
 test('组已成功后的迟到支付：同样全额自动退款', async () => {

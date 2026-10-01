@@ -36,18 +36,19 @@ async function main(): Promise<void> {
     clock: { now: () => new Date() }
   };
   const expireTask = new ExpireReservationsTask(expiryDeps);
-  const deadlineTask = new FailDeadlineGroupsTask(expiryDeps);
   // T006 支付任务（D010 单 Worker 循环五任务；状态全在 DB，重启自动恢复）
   const payments = new PostgresPaymentRepository(pool);
   const refunds = new PostgresRefundRepository(pool);
   const payChannel = app.get<import('../contexts/payments/application/ports').PaymentChannelPort>('PAY_CHANNEL_PORT');
   const refundCreator = new CreateFullRefundUseCase({ refunds, payments, clock: expiryDeps.clock });
+  // 组截止（复验 A02）：失效后为已支付订单创建 group_failed 全额退款（幂等重扫）
+  const deadlineTask = new FailDeadlineGroupsTask({ ...expiryDeps, payments, refunds: { createFullRefund: (input, sessionTx) => refundCreator.execute(input, sessionTx) } });
   const confirm = new ConfirmPaymentWorkflow({
     groups: expiryDeps.groups,
     reservations: expiryDeps.reservations,
     orders: expiryDeps.orders,
     payments,
-    refunds: { createFullRefund: (input) => refundCreator.execute(input) },
+    refunds: { createFullRefund: (input, sessionTx) => refundCreator.execute(input, sessionTx) },
     stocks: expiryDeps.stocks,
     runner: expiryDeps.runner,
     clock: expiryDeps.clock
