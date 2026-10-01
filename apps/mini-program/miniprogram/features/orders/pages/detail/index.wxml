@@ -43,6 +43,7 @@
       <view class="hint">地址后续修改不影响本订单。</view>
     </view>
 
+    <button wx:if="{{canCancel}}" class="pay-btn" bindtap="initiatePay" loading="{{busy}}" disabled="{{busy}}">发起支付</button>
     <button wx:if="{{canCancel}}" class="danger-btn" bindtap="cancelOrder" loading="{{busy}}" disabled="{{busy}}">取消订单</button>
   </block>
 </view>

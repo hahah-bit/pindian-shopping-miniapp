@@ -93,8 +93,21 @@ import { MiniOrdersController } from '../contexts/ordering/adapters/inbound/mini
 import { AdminOrderGroupController } from '../contexts/ordering/adapters/inbound/admin/admin-order-group.controller';
 import { AdminOrderQueries, AdminGroupQueries } from '../contexts/ordering/application/admin-views';
 import { getProductSnapshotPort, getStockReservationPort } from '../contexts/catalog/adapters/outbound/catalog-stock-adapters';
+import { PostgresPaymentRepository } from '../contexts/payments/adapters/outbound/postgres/payment-repository';
+import { MiniPayController } from '../contexts/payments/adapters/inbound/mini/mini-pay.controller';
+import { NotifyController } from '../contexts/payments/adapters/inbound/public/payment-notify.controller';
+import { AdminPayRefundController } from '../contexts/payments/adapters/inbound/admin/admin-pay-refund.controller';
+import { InitiatePayment, PaymentQueryResult } from '../contexts/payments/application';
+import { MarkPaymentNotAppliedRefunder } from '../contexts/payments/application/apply-payment';
+import { HttpWxPayAdapter } from '../contexts/payments/adapters/outbound/wechat/wx-pay.adapter';
+import { WxPayNotifyVerifier } from '../contexts/payments/adapters/outbound/wechat/wx-pay-notify-verifier';
+import { PostgresRefundRepository } from '../contexts/payments/adapters/outbound/postgres/refund-repository';
+import { ConfirmPaymentWorkflow } from '../workflows/payment-confirm.workflow';
+import { CreateFullRefundUseCase, CancelPaidOrderWorkflow } from '../contexts/payments/application/refund-flow';
+import { AdminPayRefundQueries } from '../contexts/payments/application/admin-pay-refund-queries';
 import { contexts } from './context-registry';
 import { readConfig } from './config';
+import type { RuntimeConfig } from './config';
 import { TOKENS } from './injection-tokens';
 
 /** 装配层：绑定端口实现与用例；领域与应用不感知 DI。 */
@@ -113,7 +126,10 @@ import { TOKENS } from './injection-tokens';
     MiniAddressesController,
     AdminUsersController,
     MiniOrdersController,
-    AdminOrderGroupController
+    MiniPayController,
+    NotifyController,
+    AdminOrderGroupController,
+    AdminPayRefundController
   ],
   providers: [
     { provide: TOKENS.PgPool, useFactory: () => new Pool({ connectionString: readConfig().databaseUrl, max: 10 }) },
@@ -238,22 +254,34 @@ import { TOKENS } from './injection-tokens';
       inject: ['GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'ORDER_REPOSITORY', 'ADDRESS_OWNERSHIP_PORT', 'PRODUCT_SNAPSHOT_PORT', 'STOCK_RESERVATION_PORT', TOKENS.PgPool, TOKENS.Clock]
     },
     { provide: 'STOCK_RESERVATION_PORT', useFactory: (pool: Pool) => getStockReservationPort(pool), inject: [TOKENS.PgPool] },
+    // 支付退款（T006）
+    { provide: 'PAYMENT_REPOSITORY', useFactory: (pool: Pool) => new PostgresPaymentRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'PAY_CHANNEL_PORT', useFactory: () => new HttpWxPayAdapter(wxPayRuntime()), inject: [] },
+    { provide: 'PAY_CONFIG', useFactory: (adapter: HttpWxPayAdapter) => ({ configured: adapter.configured, notifyUrl: adapter.notifyUrl }), inject: ['PAY_CHANNEL_PORT'] },
     {
-      provide: CancelUnpaidOrder,
-      useFactory: (orders, reservations, groups, clock, pool: Pool) => new CancelUnpaidOrder({ orders, reservations, groups, clock, runner: new PostgresTransactionRunner(pool) }),
-      inject: ['ORDER_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'GROUP_REPOSITORY', TOKENS.Clock, TOKENS.PgPool]
+      provide: InitiatePayment,
+      useFactory: (orders, groups, payments, users, channel, pool: Pool, clock, payChannel: HttpWxPayAdapter) =>
+        new InitiatePayment({ orders, groups, payments, channel: payChannel, users, runner: new PostgresTransactionRunner(pool), clock, payConfig: { configured: payChannel.configured, notifyUrl: payChannel.notifyUrl } }),
+      inject: ['ORDER_REPOSITORY', 'GROUP_REPOSITORY', 'PAYMENT_REPOSITORY', 'USER_OPENID_PORT', 'PAY_CHANNEL_PORT', TOKENS.PgPool, TOKENS.Clock, 'PAY_CHANNEL_PORT']
     },
-    // 后台订单/组查询（F018）
+    { provide: 'USER_OPENID_PORT', useFactory: (identities) => ({ getOpenid: async (userId: string) => { const r = await identities.findByUserId(userId); return r?.state.openid ?? null; } }), inject: ['WECHAT_IDENTITY_REPOSITORY'] },
+    { provide: PaymentQueryResult, useFactory: (payments, orders) => new PaymentQueryResult({ payments, orders }), inject: ['PAYMENT_REPOSITORY', 'ORDER_REPOSITORY'] },
+    { provide: 'NOTIFY_VERIFIER', useFactory: () => new WxPayNotifyVerifier({ configured: wxPayRuntime().configured, apiV3Key: wxPayRuntime().apiV3Key, mchid: wxPayRuntime().mchid }) },
     {
-      provide: 'ADMIN_ORDER_QUERIES',
-      useFactory: (orders: OrderRepository, users) => new AdminOrderQueries({ orders, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }),
-      inject: ['ORDER_REPOSITORY', 'USER_REPOSITORY']
+      provide: 'NOTIFY_APPLIER',
+      useFactory: (payments, groups, reservations, orders, stocks, refunds, pool: Pool, clock) => {
+        const confirm = new ConfirmPaymentWorkflow({ groups, reservations, orders, payments, refunds: { createFullRefund: (i) => refunds.createFullRefund(i) }, stocks, runner: new PostgresTransactionRunner(pool), clock });
+        return { apply: async (fact: { outTradeNo: string; channelTransactionId: string; payerTotal: number; payload: Record<string, unknown> }) => confirm.execute({ channelFact: fact, source: 'callback' }) };
+      },
+      inject: ['PAYMENT_REPOSITORY', 'GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'ORDER_REPOSITORY', 'STOCK_RESERVATION_PORT', 'REFUND_CREATOR', TOKENS.PgPool, TOKENS.Clock]
     },
-    {
-      provide: 'ADMIN_GROUP_QUERIES',
-      useFactory: (groups, reservations, orders: OrderRepository, users) => new AdminGroupQueries({ groups, reservations, orders, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }),
-      inject: ['GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'ORDER_REPOSITORY', 'USER_REPOSITORY']
-    },
+    { provide: 'REFUND_CREATOR', useFactory: (refunds, payments, clock) => new CreateFullRefundUseCase({ refunds, payments, clock }), inject: ['REFUND_REPOSITORY', 'PAYMENT_REPOSITORY', TOKENS.Clock] },
+    { provide: CancelUnpaidOrder, useFactory: (orders, reservations, groups, clock, pool: Pool) => new CancelUnpaidOrder({ orders, reservations, groups, clock, runner: new PostgresTransactionRunner(pool) }), inject: ['ORDER_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'GROUP_REPOSITORY', TOKENS.Clock, TOKENS.PgPool] },
+    { provide: CancelPaidOrderWorkflow, useFactory: (groups, orders, payments, refunds, creator, pool: Pool, clock) => new CancelPaidOrderWorkflow({ groups, orders, payments, refunds, creator, runner: new PostgresTransactionRunner(pool), clock }), inject: ['GROUP_REPOSITORY', 'ORDER_REPOSITORY', 'PAYMENT_REPOSITORY', 'REFUND_REPOSITORY', 'REFUND_CREATOR', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: 'REFUND_REPOSITORY', useFactory: (pool: Pool) => new PostgresRefundRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'ADMIN_ORDER_QUERIES', useFactory: (orders: OrderRepository, users) => new AdminOrderQueries({ orders, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }), inject: ['ORDER_REPOSITORY', 'USER_REPOSITORY'] },
+    { provide: 'ADMIN_GROUP_QUERIES', useFactory: (groups, reservations, orders, users) => new AdminGroupQueries({ groups, reservations, orders, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }), inject: ['GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'ORDER_REPOSITORY', 'USER_REPOSITORY'] },
+    { provide: 'ADMIN_PAY_REFUND_QUERIES', useFactory: (payments, refunds, users) => new AdminPayRefundQueries({ payments, refunds, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }), inject: ['PAYMENT_REPOSITORY', 'REFUND_REPOSITORY', 'USER_REPOSITORY'] },
     // 跨上下文工作流
     {
       provide: CreateProductWorkflow,
@@ -268,3 +296,29 @@ import { TOKENS } from './injection-tokens';
   exports: [CheckReadiness]
 })
 export class FoundationModule {}
+
+function wxPayRuntime() {
+  const c = readConfig();
+  return {
+    configured: Boolean(c.wxPayMchid && c.wxPayApiV3Key && c.wxPaySerialNo && c.wxPayPrivateKeyPath),
+    mchid: c.wxPayMchid,
+    appid: c.wxAppid,
+    apiV3Key: c.wxPayApiV3Key,
+    privateKeyPath: c.wxPayPrivateKeyPath,
+    serialNo: c.wxPaySerialNo,
+    notifyUrl: c.wxPayNotifyUrl
+  };
+}
+
+function wxPayRuntimeConfig() {
+  const c = readConfig();
+  return {
+    configured: Boolean(c.wxPayMchid && c.wxPayApiV3Key && c.wxPaySerialNo && c.wxPayPrivateKeyPath),
+    mchid: c.wxPayMchid,
+    appid: c.wxAppid,
+    apiV3Key: c.wxPayApiV3Key,
+    privateKeyPath: c.wxPayPrivateKeyPath,
+    serialNo: c.wxPaySerialNo,
+    notifyUrl: c.wxPayNotifyUrl
+  };
+}

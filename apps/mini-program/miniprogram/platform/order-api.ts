@@ -10,15 +10,17 @@ function newIdempotencyKey(): string {
   return `${hex()}${hex()}-${hex()}-4${hex().slice(1)}-8${hex().slice(1)}-${hex()}${hex()}${hex().slice(0, 4)}`;
 }
 
-function request<T>(options: { path: string; method: 'GET' | 'POST'; body?: Record<string, unknown> }): Promise<T> {
+function request<T>(options: { path: string; method: 'GET' | 'POST'; body?: Record<string, unknown>; authed?: boolean }): Promise<T> {
   return new Promise((resolve, reject) => {
     const token = storedUserToken();
     const header: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (!token) {
-      reject(new UserAuthExpiredError());
-      return;
+    if (options.authed) {
+      if (!token) {
+        reject(new UserAuthExpiredError());
+        return;
+      }
+      header.Authorization = `Bearer ${token}`;
     }
-    header.Authorization = `Bearer ${token}`;
     wx.request<ApiResponse<T>>({
       url: `${apiConfig.baseUrl}${options.path}`,
       method: options.method,
@@ -69,4 +71,40 @@ export function getMyOrder(id: string): Promise<MiniOrderView> {
 
 export function cancelMyOrder(id: string): Promise<{ cancelled: boolean }> {
   return request({ path: `/api/mini/v1/orders/${id}/cancel`, method: 'POST' });
+}
+
+// ---------- 支付（T006） ----------
+
+export interface PayParams {
+  timeStamp: string;
+  nonceStr: string;
+  package: string;
+  signType: 'RSA';
+  paySign: string;
+}
+
+export interface PayInitiation {
+  paymentId: string;
+  status: 'processing' | 'unknown';
+  payParams?: PayParams;
+}
+
+export function payOrder(orderId: string): Promise<PayInitiation> {
+  return request({ path: `/api/mini/v1/orders/${orderId}/pay`, method: 'POST', authed: true });
+}
+
+export function queryPaymentResult(orderId: string): Promise<MiniOrderView> {
+  return request({ path: `/api/mini/v1/orders/${orderId}/payment-result`, method: 'POST', authed: true });
+}
+
+export interface RefundView {
+  id: string;
+  status: 'requested' | 'submitted' | 'processing' | 'succeeded' | 'failed';
+  amountFen: number;
+  reason: string;
+  createdAtText: string;
+}
+
+export function listMyRefunds(orderId: string): Promise<{ items: RefundView[] }> {
+  return request({ path: `/api/mini/v1/orders/${orderId}/refunds`, method: 'GET', authed: true });
 }

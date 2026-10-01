@@ -91,8 +91,8 @@ export class AdminGroupQueries {
     if (typeof groupId !== 'string' || !groupId) throw new ApplicationError('NOT_FOUND', '拼单组不存在');
     const group = await this.deps.groups.findById(groupId);
     if (!group) throw new ApplicationError('NOT_FOUND', '拼单组不存在');
-    const reservations = await this.deps.reservations.listByGroup(group.state.groupId);
-    const members = await Promise.all(reservations.map(async (reservation) => {
+    const reservations = (this.deps.reservations as { listByGroup(id: string): Promise<{ state: { orderId: string; units: number; status: string } }[]> } | undefined)?.listByGroup?.(group.state.groupId) ?? Promise.resolve([]);
+    const members = await Promise.all((await reservations).map(async (reservation) => {
       const order = await this.deps.orders.findById(reservation.state.orderId);
       return {
         orderNo: order?.state.orderNo ?? '',

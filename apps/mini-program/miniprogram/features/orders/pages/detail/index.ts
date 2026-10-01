@@ -1,4 +1,4 @@
-import { getMyOrder, cancelMyOrder, ApiError } from '../../../../platform/order-api';
+import { getMyOrder, cancelMyOrder, payOrder, queryPaymentResult, ApiError } from '../../../../platform/order-api';
 import { UserAuthExpiredError } from '../../../../platform/user-auth';
 import { formatFen } from '../../../../utils/format';
 import type { MiniOrderView } from '@pindian/contracts';
@@ -117,6 +117,37 @@ Page({
     } catch (cause) {
       if (cause instanceof UserAuthExpiredError) wx.showToast({ title: '请先登录', icon: 'none' });
       else wx.showToast({ title: cause instanceof ApiError || cause instanceof Error ? cause.message : '取消失败', icon: 'none' });
+    } finally {
+      this.setData({ busy: false });
+    }
+  },
+
+  /** 发起支付：调起 wx.requestPayment；前端回调仅触发后端查单确认。 */
+  async initiatePay() {
+    if (this.data.busy || !this.data.order) return;
+    this.setData({ busy: true, error: '' });
+    const orderId = this.data.order.id;
+    try {
+      const init = await payOrder(orderId);
+      if (!init.payParams) {
+        wx.showToast({ title: '支付结果确认中，请稍后刷新', icon: 'none' });
+        return;
+      }
+      const pp = init.payParams;
+      await new Promise<void>((resolve, reject) => {
+        wx.requestPayment({
+          timeStamp: pp.timeStamp, nonceStr: pp.nonceStr, package: pp.package,
+          signType: pp.signType as 'RSA', paySign: pp.paySign,
+          success: () => resolve(),
+          fail: (e) => reject(new Error(e.errMsg && e.errMsg.includes('cancel') ? '已取消支付' : '支付失败')),
+        });
+      });
+      // 前端回调不可靠——触发后端查单确认后刷新
+      await queryPaymentResult(orderId).catch(() => undefined);
+      await this.load(orderId);
+    } catch (cause) {
+      if (cause instanceof UserAuthExpiredError) { this.setData({ error: '请先登录' }); return; }
+      this.setData({ error: cause instanceof Error ? cause.message : '支付失败' });
     } finally {
       this.setData({ busy: false });
     }

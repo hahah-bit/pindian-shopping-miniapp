@@ -39,6 +39,11 @@ export interface PaymentRepository {
   findByOrderId(orderId: string): Promise<Payment | null>;
   findById(paymentId: string): Promise<Payment | null>;
   save(payment: Payment): Promise<void>;
+  /** 查询补偿：超静默期未更新的 processing/unknown 单。 */
+  findStale(now: Date, limit: number): Promise<Payment[]>;
+  /** 后台异常统计。 */
+  countByStatus(status: 'pending_review' | 'processing' | 'unknown'): Promise<number>;
+  listAdmin(query: { status?: string | null; page: number; pageSize: number }): Promise<{ items: Payment[]; total: number }>;
 }
 
 export interface UserOpenidPort {

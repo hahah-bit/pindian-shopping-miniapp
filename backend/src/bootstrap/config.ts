@@ -7,6 +7,11 @@ export interface RuntimeConfig {
   adminSessionTtlMinutes: number;
   userSessionTtlMinutes: number;
   wxAppid: string | null;
+  wxPayMchid: string | null;
+  wxPayApiV3Key: string | null;
+  wxPaySerialNo: string | null;
+  wxPayPrivateKeyPath: string | null;
+  wxPayNotifyUrl: string;
   wxAppSecret: string | null;
 }
 
@@ -48,6 +53,11 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig 
     adminSessionTtlMinutes: parsePositiveInt(env.ADMIN_SESSION_TTL_MINUTES, 720),
     userSessionTtlMinutes: parsePositiveInt(env.USER_SESSION_TTL_MINUTES, 20160),
     wxAppid: env.WX_APPID?.trim() || null,
-    wxAppSecret: env.WX_APP_SECRET?.trim() || null
+    wxAppSecret: env.WX_APP_SECRET?.trim() || null,
+    wxPayMchid: env.WX_PAY_MCHID?.trim() || null,
+    wxPayApiV3Key: env.WX_PAY_APIV3_KEY?.trim() || null,
+    wxPaySerialNo: env.WX_PAY_SERIAL_NO?.trim() || null,
+    wxPayPrivateKeyPath: env.WX_PAY_PRIVATE_KEY_PATH?.trim() || null,
+    wxPayNotifyUrl: env.WX_PAY_NOTIFY_URL?.trim() || 'http://localhost:3000/api/payments/v1/notify'
   };
 }
