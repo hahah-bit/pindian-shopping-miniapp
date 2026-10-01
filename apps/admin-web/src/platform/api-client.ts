@@ -1,25 +1,4 @@
-import type {
-  AdminGroupListItem,
-  AdminOrderListItem,
-  AdminPhoneReveal,
-  AdminUserListItem,
-  AdminProductListItem,
-  AdminProductView,
-  ApiResponse,
-  CreateProductRequest,
-  LoginResponse,
-  MediaAssetAdminView,
-  MediaAssetView,
-  MiniProductListItem,
-  MiniProductView,
-  PageView,
-  PlatformInfo,
-  StockAdjustmentRequest,
-  StockAdjustmentResult,
-  StockMovementView,
-  StockView,
-  UpdateProductRequest
-} from '@pindian/contracts';
+import type { AdminGroupListItem, AdminOrderListItem, AdminPhoneReveal, AdminUserListItem, AdminProductListItem, AdminProductView, ApiResponse, CreateProductRequest, LoginResponse, MediaAssetAdminView, MediaAssetView, MiniProductListItem, MiniProductView, PageView, PlatformInfo, StockAdjustmentRequest, StockAdjustmentResult, StockMovementView, StockView, UpdateProductRequest, AdminPaymentListItem, AdminRefundListItem, PaymentAnomaliesView } from '@pindian/contracts';
 
 /** 结构化 API 错误：携带后端错误码与原因清单。 */
 export class ApiClientError extends Error {
@@ -225,4 +204,30 @@ export function formatFen(fen: number): string {
   const sign = fen < 0 ? '-' : '';
   const abs = Math.abs(Math.trunc(fen));
   return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
+}
+
+// ---------- 支付与退款（T006） ----------
+
+export async function listAdminPayments(query: { status?: string; page?: number; pageSize?: number } = {}): Promise<PageView<AdminPaymentListItem>> {
+  const params = new URLSearchParams();
+  if (query.status) params.set('status', query.status);
+  params.set('page', String(query.page ?? 1));
+  params.set('pageSize', String(query.pageSize ?? 10));
+  return request<PageView<AdminPaymentListItem>>(`/api/admin/v1/payments?${params.toString()}`);
+}
+
+export async function listAdminRefunds(query: { status?: string; page?: number; pageSize?: number } = {}): Promise<PageView<AdminRefundListItem>> {
+  const params = new URLSearchParams();
+  if (query.status) params.set('status', query.status);
+  params.set('page', String(query.page ?? 1));
+  params.set('pageSize', String(query.pageSize ?? 10));
+  return request<PageView<AdminRefundListItem>>(`/api/admin/v1/refunds?${params.toString()}`);
+}
+
+export async function getPaymentAnomalies(): Promise<PaymentAnomaliesView> {
+  return request<PaymentAnomaliesView>('/api/admin/v1/payment-anomalies');
+}
+
+export async function retryAdminRefund(id: string, reason: string): Promise<{ status: string }> {
+  return request<{ status: string }>(`/api/admin/v1/refunds/${id}/retry`, { method: 'POST', body: JSON.stringify({ reason }) });
 }

@@ -109,6 +109,13 @@ export class PostgresRefundRepository implements RefundRepositoryPort {
     });
   }
 
+  async countFailedRefunds(): Promise<number> {
+    return this.query(async (client) => {
+      const { rows } = await client.query<{ total: string }>(`SELECT COUNT(*)::int4 AS total FROM refunds WHERE status = 'failed'`);
+      return Number(rows[0]?.total ?? 0);
+    });
+  }
+
   async listAdmin(query: { status?: string | null; page: number; pageSize: number }): Promise<{ items: Refund[]; total: number }> {
     return this.query(async (client) => {
       const conditions: string[] = [];

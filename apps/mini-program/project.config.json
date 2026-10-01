@@ -1,7 +1,37 @@
 {
-  "appid": "touristappid",
+  "appid": "wxeffad301b6081643",
   "projectname": "pindian-shopping",
   "miniprogramRoot": "miniprogram/",
   "compileType": "miniprogram",
-  "setting": { "useCompilerPlugins": ["typescript"], "es6": true, "minified": true, "urlCheck": true }
+  "setting": {
+    "useCompilerPlugins": [
+      "typescript"
+    ],
+    "es6": true,
+    "minified": true,
+    "urlCheck": true,
+    "postcss": false,
+    "compileWorklet": false,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "enhance": false,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "condition": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {}
 }

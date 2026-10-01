@@ -10,6 +10,7 @@ export interface RefundRepositoryPort {
   findByOutRefundNo(outRefundNo: string): Promise<Refund | null>;
   findRefundDueForSubmit(now: Date, limit: number): Promise<Refund[]>;
   findRefundDueForQuery(now: Date, limit: number): Promise<Refund[]>;
+  countFailedRefunds(): Promise<number>;
   listAdmin(query: { status?: string | null; page: number; pageSize: number }): Promise<{ items: Refund[]; total: number }>;
 }
 

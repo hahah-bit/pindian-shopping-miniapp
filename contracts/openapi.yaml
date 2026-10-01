@@ -712,6 +712,383 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/AdminUser' }
         '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/orders:
+    post:
+      operationId: placeMiniOrder
+      security: [{ bearerAuth: [] }]
+      summary: 提交订单（预占份额；幂等键防重复建单）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, units, addressId, idempotencyKey]
+              properties:
+                productId: { type: string, format: uuid }
+                units: { type: integer, description: 60 单位制份额（30/20/15/12 为常见整除选项；以商品配置为准）, minimum: 1, maximum: 59 }
+                addressId: { type: string, format: uuid }
+                idempotencyKey: { type: string, maxLength: 64 }
+      responses:
+        '201':
+          description: 已建单并预占（金额以后端快照为权威）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/MiniOrderPlaced' }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409': { $ref: '#/components/responses/Error409' }
+    get:
+      operationId: listMyMiniOrders
+      security: [{ bearerAuth: [] }]
+      summary: 我的订单列表
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 分页订单列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, page, pageSize, total]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/MiniOrderView' } }
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      total: { type: integer }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/mini/v1/orders/{id}:
+    get:
+      operationId: getMyMiniOrder
+      security: [{ bearerAuth: [] }]
+      summary: 订单详情（本人订单；他人订单一律 404）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 订单视图
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/MiniOrderView' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/orders/{id}/cancel:
+    post:
+      operationId: cancelMyMiniOrder
+      security: [{ bearerAuth: [] }]
+      summary: 取消订单（未支付释放份额；已支付且组进行中→原路全额退款，D007/D008）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 已受理取消
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [cancelled]
+                    properties:
+                      cancelled: { type: boolean }
+                      refundId: { type: string, format: uuid, description: 已支付取消时返回（若有） }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/mini/v1/orders/{id}/pay:
+    post:
+      operationId: payMiniOrder
+      security: [{ bearerAuth: [] }]
+      summary: 发起微信支付（幂等；返回 wx.requestPayment 参数；渠道未配置 503）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 调起参数或结果未知（不在此接口判定支付成功）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/PayInitiation' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409': { $ref: '#/components/responses/Error409' }
+        '503': { $ref: '#/components/responses/Error503' }
+  /api/mini/v1/orders/{id}/payment-result:
+    post:
+      operationId: queryMiniPaymentResult
+      security: [{ bearerAuth: [] }]
+      summary: 支付结果查询（以后端订单状态为准；前端回调不可靠）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 订单最新视图
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/MiniOrderView' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/orders/{id}/refunds:
+    get:
+      operationId: listMyOrderRefunds
+      security: [{ bearerAuth: [] }]
+      summary: 本单退款进度（仅本人订单）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 退款记录列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/MiniRefundView' } }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/orders:
+    get:
+      operationId: listAdminOrders
+      security: [{ bearerAuth: [] }]
+      summary: 后台订单列表（order:manage）
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [unpaid, paid, cancelled, expired] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 分页订单列表（昵称投影；手机号脱敏）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, total]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/AdminOrderListItem' } }
+                      total: { type: integer }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/orders/{id}:
+    get:
+      operationId: getAdminOrder
+      security: [{ bearerAuth: [] }]
+      summary: 后台订单详情（order:manage）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 订单详情
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/MiniOrderView' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/groups:
+    get:
+      operationId: listAdminGroups
+      security: [{ bearerAuth: [] }]
+      summary: 后台拼单组列表（order:manage）
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, success, failed] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 分页拼单组列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, total]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/AdminGroupListItem' } }
+                      total: { type: integer }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/payments:
+    get:
+      operationId: listAdminPayments
+      security: [{ bearerAuth: [] }]
+      summary: 后台支付单列表（order:manage）
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [created, processing, unknown, succeeded, closed] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 分页支付单列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, total]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/AdminPaymentListItem' } }
+                      total: { type: integer }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/refunds:
+    get:
+      operationId: listAdminRefunds
+      security: [{ bearerAuth: [] }]
+      summary: 后台退款单列表（order:manage）
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [requested, submitted, processing, succeeded, failed] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 分页退款单列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, total]
+                    properties:
+                      items: { type: array, items: { $ref: '#/components/schemas/AdminRefundListItem' } }
+                      total: { type: integer }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/payment-anomalies:
+    get:
+      operationId: getAdminPaymentAnomalies
+      security: [{ bearerAuth: [] }]
+      summary: 支付/退款异常计数（人工处理入口数据源；order:manage）
+      responses:
+        '200':
+          description: 异常计数
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/PaymentAnomaliesView' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/refunds/{id}/retry:
+    post:
+      operationId: retryAdminRefund
+      security: [{ bearerAuth: [] }]
+      summary: 失败退款人工重试（仅 failed 且未超上限；重置为 requested 由退款驱动按幂等键重新提交；写操作审计；order:manage）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        '200':
+          description: 已重新进入退款驱动
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [status]
+                    properties:
+                      status: { type: string, enum: [requested] }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/payments/v1/notify:
+    post:
+      operationId: wechatPayNotify
+      summary: 微信支付回调（微信服务器调用；Wechatpay-Serial/Signature/Timestamp/Nonce 头验签 + APIv3 AES-256-GCM 解密 + 幂等应用；验签失败 400）
+      security: []
+      parameters:
+        - { name: Wechatpay-Serial, in: header, required: true, schema: { type: string } }
+        - { name: Wechatpay-Signature, in: header, required: true, schema: { type: string } }
+        - { name: Wechatpay-Timestamp, in: header, required: true, schema: { type: string } }
+        - { name: Wechatpay-Nonce, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource]
+              properties:
+                id: { type: string }
+                event_type: { type: string, example: TRANSACTION.SUCCESS }
+                resource:
+                  type: object
+                  required: [ciphertext, nonce, associated_data]
+                  properties:
+                    ciphertext: { type: string, description: APIv3 密钥 AEAD_AES_256_GCM 密文（base64，tag 后置 16 字节） }
+                    nonce: { type: string }
+                    associated_data: { type: string }
+      responses:
+        '200': { description: 已受理（幂等；重复通知返回同样成功） }
+        '400': { $ref: '#/components/responses/Error400' }
 components:
   securitySchemes:
     bearerAuth:
@@ -765,6 +1142,11 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
     Error404:
       description: 资源不存在
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Error503:
+      description: 依赖未就绪（如微信支付渠道未配置）
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1102,3 +1484,142 @@ components:
         status: { type: string, enum: [active, disabled] }
         createdAt: { type: string, format: date-time }
         lastLoginAt: { type: string, format: date-time }
+    MiniOrderPlaced:
+      type: object
+      required: [id, orderNo, status, units, quote, reservationExpiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        orderNo: { type: string }
+        status: { type: string, enum: [unpaid] }
+        units: { type: integer }
+        quote: { $ref: '#/components/schemas/OrderQuoteView' }
+        reservationExpiresAt: { type: string, format: date-time }
+    OrderQuoteView:
+      type: object
+      required: [totalAmountFen, goodsAmountFen, serviceFeeFen, tailAdjustFen, isFinalOrder]
+      properties:
+        totalAmountFen: { type: integer, description: 应付总额（分） }
+        goodsAmountFen: { type: integer, description: 商品金额（分） }
+        serviceFeeFen: { type: integer, description: 平台服务费（分，默认 500） }
+        tailAdjustFen: { type: integer, description: 尾差调整（分，D006 标准价+平台让利台账） }
+        isFinalOrder: { type: boolean }
+    MiniOrderView:
+      type: object
+      required: [id, orderNo, status, units, productId, groupId, quote, productSnapshot, addressSnapshot, reservationExpiresAt, paymentNotice, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        orderNo: { type: string }
+        status: { type: string, enum: [unpaid, paid, cancelled, expired] }
+        units: { type: integer }
+        productId: { type: string, format: uuid }
+        groupId: { type: string, format: uuid }
+        quote: { $ref: '#/components/schemas/OrderQuoteView' }
+        productSnapshot:
+          type: object
+          required: [originalPriceFen, unit, wholeQuantityText, referenceQuantityText]
+          properties:
+            originalPriceFen: { type: integer }
+            unit: { type: string }
+            wholeQuantityText: { type: string }
+            referenceQuantityText: { type: string }
+        addressSnapshot:
+          type: object
+          required: [receiverName, phone, province, city, district, detail]
+          properties:
+            receiverName: { type: string }
+            phone: { type: string }
+            province: { type: string }
+            city: { type: string }
+            district: { type: string }
+            detail: { type: string }
+        groupSummary:
+          type: [object, 'null']
+          properties:
+            groupId: { type: string }
+            status: { type: string, enum: [open, success, failed] }
+            paidUnits: { type: integer }
+            reservedUnits: { type: integer }
+            remainingCapacity: { type: integer }
+            deadline: { type: string, format: date-time }
+        reservationExpiresAt: { type: string, format: date-time }
+        paymentNotice: { type: string, description: 渠道未配置时的提示；已配置为空串 }
+        createdAt: { type: string, format: date-time }
+    PayInitiation:
+      type: object
+      required: [paymentId, status]
+      properties:
+        paymentId: { type: string, format: uuid }
+        status: { type: string, enum: [processing, unknown], description: processing=返回调起参数；unknown=渠道结果未定，稍后用 payment-result 查询 }
+        payParams:
+          type: object
+          required: [timeStamp, nonceStr, package, signType, paySign]
+          description: wx.requestPayment 参数（RSA）
+          properties:
+            timeStamp: { type: string }
+            nonceStr: { type: string }
+            package: { type: string, example: prepay_id=wx201... }
+            signType: { type: string, enum: [RSA] }
+            paySign: { type: string }
+        message: { type: string }
+    MiniRefundView:
+      type: object
+      required: [id, status, amountFen, reason, createdAtText]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [requested, submitted, processing, succeeded, failed] }
+        amountFen: { type: integer }
+        reason: { type: string, enum: [user_cancel, group_failed, late_payment] }
+        createdAtText: { type: string, format: date-time }
+    AdminOrderListItem:
+      type: object
+      required: [id, orderNo, status, units, nickname, totalAmountFen, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        orderNo: { type: string }
+        status: { type: string, enum: [unpaid, paid, cancelled, expired] }
+        units: { type: integer }
+        nickname: { type: string }
+        totalAmountFen: { type: integer }
+        createdAt: { type: string, format: date-time }
+    AdminGroupListItem:
+      type: object
+      required: [id, productId, status, paidUnits, reservedUnits, remainingCapacity, deadline, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        productId: { type: string, format: uuid }
+        status: { type: string, enum: [open, success, failed] }
+        paidUnits: { type: integer }
+        reservedUnits: { type: integer }
+        remainingCapacity: { type: integer }
+        deadline: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    AdminPaymentListItem:
+      type: object
+      required: [id, orderNo, status, amountFen, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        orderNo: { type: string }
+        status: { type: string, enum: [created, processing, unknown, succeeded, closed] }
+        amountFen: { type: integer }
+        channelTransactionId: { type: string }
+        appliedResult: { type: string, enum: [applied, refunded_not_applied, pending_review] }
+        createdAt: { type: string, format: date-time }
+    AdminRefundListItem:
+      type: object
+      required: [id, orderNo, nickname, amountFen, status, reason, retryCount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        orderNo: { type: string }
+        nickname: { type: string }
+        amountFen: { type: integer }
+        status: { type: string, enum: [requested, submitted, processing, succeeded, failed] }
+        reason: { type: string, enum: [user_cancel, group_failed, late_payment] }
+        retryCount: { type: integer }
+        failReason: { type: string }
+        createdAt: { type: string, format: date-time }
+    PaymentAnomaliesView:
+      type: object
+      required: [pendingReviewPayments, failedRefunds]
+      properties:
+        pendingReviewPayments: { type: integer, description: 金额核验不一致待人工复核的支付单数 }
+        failedRefunds: { type: integer, description: 退款失败待处理单数 }

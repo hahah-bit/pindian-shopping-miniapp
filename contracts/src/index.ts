@@ -355,3 +355,64 @@ export interface AdminGroupListItem {
   deadline: string;
   createdAt: string;
 }
+
+// ---------- 支付与退款（T006） ----------
+
+/** wx.requestPayment 所需签名参数（后端按商户私钥 RSA 签名）。 */
+export interface MiniPayParams {
+  timeStamp: string;
+  nonceStr: string;
+  package: string;
+  signType: 'RSA';
+  paySign: string;
+}
+
+/** 发起支付响应：processing=返回调起参数；unknown=渠道结果未定，稍后用 payment-result 查询。 */
+export interface PayInitiation {
+  paymentId: string;
+  status: 'processing' | 'unknown';
+  payParams?: MiniPayParams;
+  message?: string;
+}
+
+export type RefundStatus = 'requested' | 'submitted' | 'processing' | 'succeeded' | 'failed';
+
+/** 小程序退款进度（仅本人订单）。 */
+export interface MiniRefundView {
+  id: string;
+  status: RefundStatus;
+  amountFen: number;
+  reason: string;
+  createdAtText: string;
+}
+
+export type PaymentStatus = 'created' | 'processing' | 'unknown' | 'succeeded' | 'closed';
+
+/** 后台支付列表行（脱敏；不含用户手机号）。 */
+export interface AdminPaymentListItem {
+  id: string;
+  orderNo: string;
+  status: PaymentStatus;
+  amountFen: number;
+  channelTransactionId?: string;
+  appliedResult?: 'applied' | 'refunded_not_applied' | 'pending_review';
+  createdAt: string;
+}
+
+/** 后台退款列表行（昵称为投影，手机号不展示）。 */
+export interface AdminRefundListItem {
+  id: string;
+  orderNo: string;
+  nickname: string;
+  amountFen: number;
+  status: RefundStatus;
+  reason: string;
+  retryCount: number;
+  failReason?: string;
+  createdAt: string;
+}
+
+export interface PaymentAnomaliesView {
+  pendingReviewPayments: number;
+  failedRefunds: number;
+}

@@ -1,7 +1,8 @@
-import { Controller, Get, Inject, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, HttpCode, Inject, Param, Body, Query, Req } from '@nestjs/common';
 import type { ApiResponse } from '@pindian/contracts';
 import type { RequestWithPrincipal } from '../../../../identity-access/adapters/inbound/admin/access.guard';
 import { RequirePermissions } from '../../../../identity-access/adapters/inbound/admin/route-access';
+import { RetryRefund } from '../../../application/refund-flow';
 
 export interface AdminPayRefundQueries {
   listPayments(query: { status?: string | null; page: number; pageSize: number }): Promise<{ items: unknown[]; total: number }>;
@@ -10,10 +11,13 @@ export interface AdminPayRefundQueries {
   countFailedRefunds(): Promise<number>;
 }
 
-/** 后台支付/退款查询与异常队列（order:manage；仅 GET 查询，改状态走渠道与 Worker）。 */
+/** 后台支付/退款查询、异常队列与失败退款重试（order:manage；状态推进只走渠道与 Worker）。 */
 @Controller('admin/v1')
 export class AdminPayRefundController {
-  constructor(@Inject('ADMIN_PAY_REFUND_QUERIES') private readonly queries: AdminPayRefundQueries) {}
+  constructor(
+    @Inject('ADMIN_PAY_REFUND_QUERIES') private readonly queries: AdminPayRefundQueries,
+    @Inject(RetryRefund) private readonly retryRefund: RetryRefund
+  ) {}
 
   @Get('payments')
   @RequirePermissions('order:manage')
@@ -33,5 +37,23 @@ export class AdminPayRefundController {
   @RequirePermissions('order:manage')
   async anomalies(@Req() request: RequestWithPrincipal): Promise<ApiResponse<{ pendingReviewPayments: number; failedRefunds: number }>> {
     return { data: { pendingReviewPayments: await this.queries.countPendingReview(), failedRefunds: await this.queries.countFailedRefunds() }, requestId: request.requestId };
+  }
+
+  /** 失败退款人工重试：仅 failed 且未超重试上限；写操作审计。 */
+  @Post('refunds/:id/retry')
+  @HttpCode(200)
+  @RequirePermissions('order:manage')
+  async retry(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Req() request: RequestWithPrincipal
+  ): Promise<ApiResponse<{ status: string }>> {
+    const result = await this.retryRefund.execute({
+      refundId: id,
+      adminId: request.adminAuth?.adminId ?? null,
+      requestId: request.requestId,
+      reason: body?.reason
+    });
+    return { data: result, requestId: request.requestId };
   }
 }

@@ -1,5 +1,5 @@
 <view class="page">
-  <view class="notice">微信支付暂未开放，开放后可支付该订单</view>
+  <view wx:if="{{order && order.paymentNotice}}" class="notice">{{order.paymentNotice}}</view>
 
   <view wx:if="{{loading}}" class="state">正在加载订单…</view>
 
@@ -43,7 +43,20 @@
       <view class="hint">地址后续修改不影响本订单。</view>
     </view>
 
-    <button wx:if="{{canCancel}}" class="pay-btn" bindtap="initiatePay" loading="{{busy}}" disabled="{{busy}}">发起支付</button>
-    <button wx:if="{{canCancel}}" class="danger-btn" bindtap="cancelOrder" loading="{{busy}}" disabled="{{busy}}">取消订单</button>
+    <view wx:if="{{refundItems.length}}" class="card">
+      <view class="section-title">退款进度</view>
+      <view wx:for="{{refundItems}}" wx:key="id" class="refund-row">
+        <text class="refund-amount">¥{{item.amountText}}</text>
+        <view class="refund-meta">
+          <text>{{item.statusText}}</text>
+          <text class="refund-time">申请于 {{item.createdAtText}}</text>
+        </view>
+      </view>
+      <view class="hint">退款按实际支付金额原路退回；失败由平台重试或人工处理。</view>
+    </view>
+
+    <button wx:if="{{order.status === 'unpaid'}}" class="pay-btn" bindtap="initiatePay" loading="{{busy}}" disabled="{{busy}}">发起支付</button>
+    <button wx:if="{{canCancel || canPaidCancel}}" class="danger-btn" bindtap="cancelOrder" loading="{{busy}}" disabled="{{busy}}">{{canPaidCancel ? '取消并退款' : '取消订单'}}</button>
+    <button wx:if="{{canPaidCancel}}" class="plain-btn" bindtap="refreshPayment" loading="{{busy}}" disabled="{{busy}}">刷新支付与退款状态</button>
   </block>
 </view>

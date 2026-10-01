@@ -93,4 +93,12 @@ export class Refund {
   canRetry(now: Date): boolean {
     return this.state.status === 'failed' && this.state.retryCount < MAX_REFUND_RETRIES;
   }
+
+  /** 人工重试重置：failed → requested（retryCount +1），由退款驱动按幂等键重新提交。 */
+  markRetryRequested(now: Date): Refund {
+    if (!this.canRetry(now)) {
+      throw new ApplicationError('REFUND_NOT_ALLOWED', `仅失败状态且重试未超 ${MAX_REFUND_RETRIES} 次可重试`);
+    }
+    return new Refund({ ...this.state, status: 'requested', retryCount: this.state.retryCount + 1, updatedAt: now });
+  }
 }

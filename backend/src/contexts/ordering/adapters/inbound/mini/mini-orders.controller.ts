@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { ApiResponse, MiniOrderView } from '@pindian/contracts';
 import { ApplicationError } from '../../../../../shared/kernel';
 import { CancelUnpaidOrder, PlaceOrderWorkflow } from '../../../../../workflows/order-place.workflow';
+import { CancelPaidOrderWorkflow } from '../../../../payments/application/refund-flow';
 import type { OrderRepository } from '../../../application/order-ports';
 import type { RequestWithPrincipal } from '../../../../identity-access/adapters/inbound/admin/access.guard';
 import { AuthRealm } from '../../../../identity-access/adapters/inbound/admin/route-access';
@@ -16,6 +17,7 @@ export class MiniOrdersController {
   constructor(
     @Inject(PlaceOrderWorkflow) private readonly placeOrder: PlaceOrderWorkflow,
     @Inject(CancelUnpaidOrder) private readonly cancelOrder: CancelUnpaidOrder,
+    @Inject(CancelPaidOrderWorkflow) private readonly cancelPaidOrder: CancelPaidOrderWorkflow,
     @Inject('ORDER_REPOSITORY') private readonly orders: OrderRepository,
   ) {}
 
@@ -68,8 +70,16 @@ export class MiniOrdersController {
   @AuthRealm('user')
   @Post(':id/cancel')
   @HttpCode(200)
-  async cancel(@Param('id') id: string, @Req() request: RequestWithPrincipal): Promise<ApiResponse<{ cancelled: true }>> {
-    return { data: await this.cancelOrder.execute({ userId: this.requireUser(request), orderId: id }), requestId: request.requestId };
+  async cancel(@Param('id') id: string, @Req() request: RequestWithPrincipal): Promise<ApiResponse<{ cancelled: true; refundId?: string }>> {
+    const userId = this.requireUser(request);
+    // 按订单状态分发：未支付→释放份额；已支付且组进行中→取消并全额退款（D007）；其余不可取消
+    const order = await this.orders.findById(id);
+    if (!order || order.state.userId !== userId) throw new ApplicationError('NOT_FOUND', '订单不存在');
+    if (order.state.status === 'paid') {
+      const result = await this.cancelPaidOrder.execute({ userId, orderId: id, requestId: request.requestId });
+      return { data: { cancelled: true, refundId: result.refundId }, requestId: request.requestId };
+    }
+    return { data: await this.cancelOrder.execute({ userId, orderId: id }), requestId: request.requestId };
   }
 
   private toView(order: NonNullable<Awaited<ReturnType<OrderRepository['findById']>>>): MiniOrderView {

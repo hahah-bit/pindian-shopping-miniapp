@@ -142,6 +142,38 @@ test('退款驱动：requested → 渠道提交 → processing；渠道幂等键
   assert.equal(channel.submits[0].refundFen, 16833);
 });
 
+test('渠道提交异常：进入 failed 并记录原因（不无限静默重试）；人工重试后 retryCount 递增', async () => {
+  const payment = makePayment();
+  const { Refund } = require('../../../backend/dist/contexts/payments/domain/index.js');
+  const refund = Refund.create({ refundId: 'aaaaaaaa-0000-4000-8000-00000000ab02', paymentId: payment.state.paymentId, orderId: ORDER, userId: USER, amountFen: 16833, reason: 'group_failed', now: NOW });
+  const refunds = new FakeRefundRepository([refund]);
+  let submitMode = 'SYSTEM_ERROR';
+  const channel = {
+    submitRefund: async () => {
+      if (submitMode === 'SYSTEM_ERROR') throw new Error('SYSTEM_ERROR');
+      if (submitMode === 'BALANCE') throw new Error('BALANCE_NOT_ENOUGH');
+      return { status: 'PROCESSING' };
+    },
+    queryRefund: async () => ({ status: 'PROCESSING' })
+  };
+  const driver = new RefundDriver({ refunds: refunds, payments: new FakePaymentRepository(payment), channel: channel, runner: new InlineRunner(), clock: { now: () => NOW } });
+  await driver.execute({ limit: 10 });
+  assert.equal(refunds.refunds[0].state.status, 'failed', '提交异常必须落 failed，进入异常队列');
+  assert.match(refunds.refunds[0].state.failReason ?? '', /SYSTEM_ERROR/);
+  // 人工重试：failed → requested（retryCount +1，驱动按幂等键 out_refund_no 重新提交）
+  const auditCalls = [];
+  const retry = new RetryRefund({ refunds: refunds, channel: channel, audit: { execute: async (entry) => auditCalls.push(entry.action) }, runner: new InlineRunner(), clock: { now: () => NOW } });
+  await retry.execute({ refundId: refund.state.refundId, adminId: 'admin-1', requestId: 'req-1', reason: '渠道恢复后重试' });
+  assert.equal(refunds.refunds[0].state.status, 'requested', 'RetryRefund 重置为 requested，由退款驱动重新提交');
+  assert.equal(refunds.refunds[0].state.retryCount, 1, '重试计数 +1');
+  assert.equal(auditCalls.includes('refund.retry'), true, '重试写审计');
+  submitMode = 'BALANCE';
+  await driver.execute({ limit: 10 });
+  assert.equal(refunds.refunds[0].state.status, 'failed');
+  assert.match(refunds.refunds[0].state.failReason ?? '', /BALANCE_NOT_ENOUGH/);
+  assert.equal(refunds.refunds[0].state.retryCount, 1, '失败重试一轮后计数 1');
+});
+
 test('退款回调确认：仅渠道证据可标 succeeded；无证据不得显示已退款（D009）', async () => {
   const payment = makePayment();
   const { Refund } = require('../../../backend/dist/contexts/payments/domain/index.js');
@@ -170,7 +202,8 @@ test('人工重试：仅 failed 可重试，需审计（D009）', async () => {
   const audit = new FakeAudit();
   const retry = new RetryRefund({ refunds: refunds, channel: new FakeChannel('PROCESSING'), audit: audit, runner: new InlineRunner(), clock: { now: () => NOW } });
   await retry.execute({ refundId: 'aaaaaaaa-0000-4000-8000-00000000aab1', adminId: 'admin-1', requestId: 'req-9', reason: '银行卡恢复' });
-  assert.equal(refunds.refunds[0].state.status, 'submitted');
+  assert.equal(refunds.refunds[0].state.status, 'requested', '重试重置为 requested，由驱动重新提交');
+  assert.equal(refunds.refunds[0].state.retryCount, 1, '重试计数 +1');
   assert.equal(audit.entries.length, 1, '审计记录');
   assert.match(audit.entries[0].action, /retry/);
   await expectRejection(() => retry.execute({ refundId: 'aaaaaaaa-0000-4000-8000-00000000rf02', adminId: 'admin-1', requestId: 'x', reason: 'y' }), 'VALIDATION_FAILED');

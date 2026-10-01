@@ -101,6 +101,10 @@ export class HttpErrorFilter implements ExceptionFilter {
       message = '请求体超过大小限制';
     }
 
+    if (status >= 500) {
+      // 未识别异常必须留服务端证据（不向客户端泄露内部细节）
+      console.error('[http] 未处理异常', error);
+    }
     response.status(status).json({ code, message, requestId: request.requestId, ...(details ? { details } : {}) });
   }
 }

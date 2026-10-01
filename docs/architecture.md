@@ -1,6 +1,6 @@
 # 拼单平台架构设计
 
-状态：T001 框架、T002 商品/图片、T003 用户身份、T004 拼单匹配/份额预占/订单报价已落地；支付/履约/客服仍待实施。日期：2026-09-30。
+状态：T001 框架、T002 商品/图片、T003 用户身份、T004 拼单匹配/份额预占/订单报价、T006 微信支付/退款/交易闭环已落地；履约/客服仍待实施。日期：2026-10-01。
 
 ## 范围与选型
 
@@ -13,7 +13,7 @@
 | 后端 | NestJS + TypeScript；领域与应用逻辑保持框架无关 |
 | 数据库 | PostgreSQL 17 系列；迁移经 `backend/migrations` + advisory lock 执行 |
 | 图片存储 | 本地文件适配器 + Docker 命名卷 `media-data`；`ImageStorage` 端口保留对象存储接入边界 |
-| 后台进程 | 同一后端工程的 Worker；仍仅做依赖健康，不执行业务任务 |
+| 后台进程 | 同一后端工程的 Worker；单循环五任务（预占过期、组截止、支付查询补偿、退款驱动、异常统计），全 DB 驱动、重启自动恢复（T006 D010） |
 | 契约 | 独立 TypeScript 传输类型 + OpenAPI；不共享后端实体 |
 | Docker | API（启动前自动迁移）、Worker、后台静态服务、PostgreSQL；Redis 为可选 profile |
 | 文件与实时通信 | 对象存储与标准 WebSocket 保留接入边界，业务任务再接入 |
@@ -44,7 +44,7 @@ flowchart TB
 | catalog | Product、ProductSpec、SalePolicySnapshot、MediaAsset（T002 已实现商品/图片） | 当前商品配置、图片资源及销售规则 |
 | inventory | Stock、StockReservation、StockMovement（T002 已实现整件库存与留痕；预留字段保留未启用） | 整件库存调整；预留属后续交易任务 |
 | group-buying | Group、ShareReservation、ShareUnits（T004 已实现：容量 60 单位制、可完成性 DP、组匹配、预占） | 组容量、预占、生效及组状态 |
-| ordering | Order、Quote、PriceSnapshot、AddressSnapshot（T004 已实现待支付订单与快照） | 用户交易与不可变订单快照；支付属后续任务 |
+| ordering | Order、Quote、PriceSnapshot、AddressSnapshot（T004） | 用户交易与不可变订单快照；支付事实归 Payments |
 | payments | Payment、Refund、Money | 实付、实退和渠道结果 |
 | fulfillment | FulfillmentOrder、Shipment、Quantity | 独立数量分配和发货事实 |
 | identity-access | User、Admin、Role、Address（T002 后台管理员；T003 用户/微信身份/用户会话/收货地址） | 后台与用户身份、会话、地址簿 |
@@ -129,11 +129,11 @@ T002 起接入鉴权与业务接口：守卫按认证域分派（admin 默认拒
 - `/api/admin/v1/users`：后台用户管理（user:manage 权限；脱敏 + 敏感查看审计）。
 - `/api/mini/v1/orders`：小程序下单（幂等键）/列表/详情/取消（user 域 Bearer）。
 - `/api/admin/v1/orders|groups`：后台订单与拼单组查询（order:manage；仅 GET）。
-- 内部 MarkOrderPaid 用例为 Payments 预留（无 HTTP 端点）；真实支付/退款/迟到回调属支付阶段。
+- T006 支付闭环：微信支付 v3 适配器（请求签名/paySign/下单/查单/关单/退款）、回调验签解密+幂等应用、五态退款（out_refund_no 幂等、失败落异常队列、人工重试审计）、迟到支付全额自动退款（D008）。未配置商户参数时全部渠道方法显式报错，无模拟成功路径。
 - `/api/media/v1/assets/{id}`：公开图片读取（仅 ready 资源，长缓存）。
 - 后续微信回调与客服 WebSocket 接口另行设计，当前不提供假回调或假聊天接口。
 
-API 统一包含 requestId；错误响应包含 code、message、requestId（及原因 details）。客户端不能将本地支付提示当作后端支付事实。金额以整数分表达；数量为十进制字符串（≤3 位小数）。管理员登录限流为进程内实现（单实例边界），多实例部署时需替换为共享存储。已落地的强一致边界：登录事务（用户+微信身份+会话）、默认地址切换（users 行锁 + 部分唯一索引）、下单事务（组行锁重查容量与可完成性 + 尾差判定 + 预占/订单原子提交）、建组整件预留（条件更新 available>0 + business_key 幂等）、并发最后份额恰一人成功。
+API 统一包含 requestId；错误响应包含 code、message、requestId（及原因 details）。客户端不能将本地支付提示当作后端支付事实。金额以整数分表达；数量为十进制字符串（≤3 位小数）。管理员登录限流为进程内实现（单实例边界），多实例部署时需替换为共享存储。已落地的强一致边界：登录事务（用户+微信身份+会话）、默认地址切换（users 行锁 + 部分唯一索引）、下单事务（组行锁重查容量与可完成性 + 尾差判定 + 预占/订单原子提交）、建组整件预留（条件更新 available>0 + business_key 幂等）、并发最后份额恰一人成功、支付确认事务（组行锁内预占转换+组金额+订单 paid+组满消耗原子提交；channel_transaction_id 唯一约束保证重复回调幂等；渠道 HTTP 调用在事务外）、取消已支付（同事务：退款单+订单 cancelled+组 paid 容量即扣，D007）。
 
 ## 交易设计保留项
 

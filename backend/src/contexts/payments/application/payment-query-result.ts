@@ -5,7 +5,7 @@ import type { MiniOrderView } from '@pindian/contracts';
 
 /** 前端支付结果查询：以后端订单状态为准（不信任前端支付提示）。 */
 export class PaymentQueryResult {
-  constructor(private readonly deps: { payments: PaymentRepository; orders: OrderRepository }) {}
+  constructor(private readonly deps: { payments: PaymentRepository; orders: OrderRepository; payConfig: { configured: boolean } }) {}
 
   async execute(input: { orderId: unknown; userId: unknown }): Promise<MiniOrderView> {
     const orderId = typeof input.orderId === 'string' ? input.orderId : '';
@@ -43,7 +43,7 @@ export class PaymentQueryResult {
       },
       groupSummary: null,
       reservationExpiresAt: s.reservationExpiresAt.toISOString(),
-      paymentNotice: s.status === 'unpaid' ? '微信支付暂未开放，开放后可支付该订单' : '',
+      paymentNotice: s.status === 'unpaid' && !this.deps.payConfig.configured ? '微信支付暂未开放，开放后可支付该订单' : '',
       createdAt: s.createdAt.toISOString()
     };
   }

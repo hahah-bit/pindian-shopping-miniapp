@@ -51,8 +51,8 @@ export class PostgresPaymentRepository implements PaymentRepository {
   async insert(payment: Payment): Promise<void> {
     const s = payment.state;
     await this.query((client) => client.query(
-      `INSERT INTO payments (${COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [s.paymentId, s.orderId, s.userId, s.amountFen, s.status, s.outTradeNo, s.channelTransactionId, s.appliedResult, s.prepayId, s.prepayExpiresAt, s.successSource, s.channelPayload ? JSON.stringify(s.channelPayload) : null, s.createdAt, s.updatedAt, s.updatedAt]
+      `INSERT INTO payments (${COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [s.paymentId, s.orderId, s.userId, s.amountFen, s.status, s.outTradeNo, s.channelTransactionId, s.appliedResult, s.prepayId, s.prepayExpiresAt, s.successSource, s.channelPayload ? JSON.stringify(s.channelPayload) : null, s.createdAt, s.updatedAt]
     ));
   }
 

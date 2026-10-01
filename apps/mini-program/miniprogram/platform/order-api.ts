@@ -1,4 +1,4 @@
-import type { MiniOrderView } from '@pindian/contracts';
+import type { MiniOrderView, MiniPayParams, PayInitiation, MiniRefundView } from '@pindian/contracts';
 import { storedUserToken, UserAuthExpiredError, ApiError } from './user-auth';
 export { UserAuthExpiredError, ApiError };
 import { apiConfig } from './config';
@@ -75,19 +75,8 @@ export function cancelMyOrder(id: string): Promise<{ cancelled: boolean }> {
 
 // ---------- 支付（T006） ----------
 
-export interface PayParams {
-  timeStamp: string;
-  nonceStr: string;
-  package: string;
-  signType: 'RSA';
-  paySign: string;
-}
-
-export interface PayInitiation {
-  paymentId: string;
-  status: 'processing' | 'unknown';
-  payParams?: PayParams;
-}
+export type PayParams = MiniPayParams;
+export type PayInitiationView = PayInitiation;
 
 export function payOrder(orderId: string): Promise<PayInitiation> {
   return request({ path: `/api/mini/v1/orders/${orderId}/pay`, method: 'POST', authed: true });
@@ -97,13 +86,7 @@ export function queryPaymentResult(orderId: string): Promise<MiniOrderView> {
   return request({ path: `/api/mini/v1/orders/${orderId}/payment-result`, method: 'POST', authed: true });
 }
 
-export interface RefundView {
-  id: string;
-  status: 'requested' | 'submitted' | 'processing' | 'succeeded' | 'failed';
-  amountFen: number;
-  reason: string;
-  createdAtText: string;
-}
+export type RefundView = MiniRefundView;
 
 export function listMyRefunds(orderId: string): Promise<{ items: RefundView[] }> {
   return request({ path: `/api/mini/v1/orders/${orderId}/refunds`, method: 'GET', authed: true });

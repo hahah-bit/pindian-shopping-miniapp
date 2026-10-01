@@ -55,6 +55,20 @@ export class PostgresGroupRepository implements GroupRepository {
     });
   }
 
+  /** 取消已支付订单（D007）：行锁下校验 open 与累计值充足后即扣 paid 容量/金额；条件更新防并发负数。 */
+  async deductPaidForCancel(groupId: string, units: number, amountFen: number, goodsFen: number, now: Date, sessionTx: unknown): Promise<boolean> {
+    return withExecutor(sessionTx as PgExecutor, async (client) => {
+      const { rows } = await client.query<{ status: string }>('SELECT status FROM groups WHERE id = $1 FOR UPDATE', [groupId]);
+      if (!rows[0] || rows[0].status !== 'open') return false;
+      const upd = await client.query(
+        `UPDATE groups SET paid_units = paid_units - $2, paid_amount_fen = paid_amount_fen - $3, paid_goods_amount_fen = paid_goods_amount_fen - $4, updated_at = $5
+         WHERE id = $1 AND status = 'open' AND paid_units >= $2 AND paid_amount_fen >= $3 AND paid_goods_amount_fen >= $4`,
+        [groupId, units, amountFen, goodsFen, now]
+      );
+      return (upd.rowCount ?? 0) === 1;
+    });
+  }
+
   /** 候选组：open、未截止、容量足够；排序 remaining↑→created↑→id。可完成性（DP）由应用层过滤——SQL 无法表达。 */
   async findCandidates(query: { productId: string; units: number; now: Date }): Promise<Group[]> {
     return this.query(async (client) => {

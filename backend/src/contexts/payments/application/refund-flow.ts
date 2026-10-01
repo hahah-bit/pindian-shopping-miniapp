@@ -116,7 +116,15 @@ export class RefundDriver {
         }
         processed++;
       } catch (error) {
-        console.error('[refund-driver] 提交失败', refund.state.refundId, error instanceof Error ? error.message : error);
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('[refund-driver] 提交失败', refund.state.refundId, message);
+        // 提交异常必须落 failed（异常队列可见、人工可重试），不能无限静默重试
+        try {
+          const failed = refund.markSubmitted(now).markFailed(message, now);
+          await this.deps.refunds.save(failed);
+        } catch (markError) {
+          console.error('[refund-driver] 失败状态落库失败', refund.state.refundId, markError instanceof Error ? markError.message : markError);
+        }
       }
     }
     for (const refund of await this.deps.refunds.findRefundDueForQuery(now, limit)) {
@@ -147,12 +155,13 @@ export class RetryRefund {
     if (!refund.canRetry(this.deps.clock.now())) {
       throw new ApplicationError('REFUND_NOT_ALLOWED', `仅失败状态且重试次数未超 ${MAX_REFUND_RETRIES} 次可重试`);
     }
-    const submitted = refund.markSubmitted(this.deps.clock.now());
-    await this.deps.refunds.save(submitted);
+    // 重置为 requested：退款驱动按幂等键 out_refund_no 重新提交；retryCount 在此递增
+    const retried = refund.markRetryRequested(this.deps.clock.now());
+    await this.deps.refunds.save(retried);
     if (this.deps.audit) {
       await this.deps.audit.execute({ adminId: input.adminId, action: 'refund.retry', resourceType: 'refund', resourceId: refundId, requestId: input.requestId });
     }
-    return { status: submitted.state.status };
+    return { status: retried.state.status };
   }
 }
 

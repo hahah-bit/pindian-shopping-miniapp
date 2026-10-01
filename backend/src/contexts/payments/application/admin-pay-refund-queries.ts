@@ -45,7 +45,6 @@ export class AdminPayRefundQueries {
   }
 
   async countFailedRefunds() {
-    const { total } = await this.deps.refunds.listAdmin({ status: 'failed', page: 1, pageSize: 1 });
-    return total;
+    return this.deps.refunds.countFailedRefunds();
   }
 }
