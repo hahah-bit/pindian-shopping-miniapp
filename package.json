@@ -29,6 +29,7 @@
     "test:task:t002": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t002",
     "test:task:t003": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t003",
     "test:task:t004": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t004",
-    "test:task:t006": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t006"
+    "test:task:t006": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t006",
+    "test:task:t007": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t007"
   }
 }

@@ -11,7 +11,7 @@ async function findTests(directory) {
   }
   return files.sort();
 }
-const taskDirs = { t001: 'tests/task-suites/t001', t002: 'tests/task-suites/t002', t003: 'tests/task-suites/t003', t006: 'tests/task-suites/t006' };
+const taskDirs = { t001: 'tests/task-suites/t001', t002: 'tests/task-suites/t002', t003: 'tests/task-suites/t003', t006: 'tests/task-suites/t006', t007: 'tests/task-suites/t007' };
 const directory = taskDirs[process.argv[2]] ?? 'tests';
 const files = await findTests(resolve(directory));
 if (!files.length) throw new Error('没有发现测试，不能视为测试通过');
