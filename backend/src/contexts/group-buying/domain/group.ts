@@ -70,12 +70,12 @@ export class Group {
     return new Group({ ...this.state, reservedUnits: after, updatedAt: this.state.updatedAt });
   }
 
-  /** 支付生效：预占单位转正（paid+units，reserved−units），总占用不变。 */
+  /** 支付生效：预占单位转正（paid+units，reserved−units），总占用不变。units 可为 0（无预占转正的纯金额更新场景，如迟到支付记录）。 */
   withPaidUnits(units: number, now: Date): Group {
     if (!this.isOpen) throw new ApplicationError('GROUP_NOT_JOINABLE', '拼单组已结束');
     const paid = this.state.paidUnits + units;
     const reserved = this.state.reservedUnits - units;
-    if (!Number.isInteger(units) || units < 1 || paid > 60 || reserved < 0) {
+    if (!Number.isInteger(units) || units < 0 || paid > 60 || reserved < 0) {
       throw new ApplicationError('SHARE_CAPACITY_CONFLICT', '份额容量竞争失败');
     }
     return new Group({ ...this.state, paidUnits: paid, reservedUnits: reserved, updatedAt: now });
