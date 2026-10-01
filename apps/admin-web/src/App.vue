@@ -10,6 +10,7 @@ import MediaLibraryView from './features/media/MediaLibraryView.vue';
 import AdminUsersView from './features/admin-users/AdminUsersView.vue';
 import AdminOrdersView from './features/admin-orders/AdminOrdersView.vue';
 import AdminPayRefundView from './features/admin-payrefund/AdminPayRefundView.vue';
+import AdminFulfillmentView from './features/admin-fulfillment/AdminFulfillmentView.vue';
 import { currentPath, navigate } from './platform/router';
 import { ApiClientError, fetchMe, logout, storedToken, storeToken } from './platform/api-client';
 
@@ -123,6 +124,7 @@ onMounted(restoreSession);
         <AdminUsersView v-else-if="currentPath === '/users'" />
         <AdminOrdersView v-else-if="currentPath === '/orders'" />
         <AdminPayRefundView v-else-if="currentPath === '/payments'" />
+        <AdminFulfillmentView v-else-if="currentPath === '/fulfillment'" />
         <ModulePlaceholder v-else :title="title" />
       </section>
     </main>

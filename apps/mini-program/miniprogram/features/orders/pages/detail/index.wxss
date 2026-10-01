@@ -22,3 +22,9 @@
 .refund-meta { display: grid; gap: 4rpx; text-align: right; }
 .refund-time { color: #a5b3ad; font-size: 22rpx; }
 .plain-btn { background: #f2f6f4; color: #54657a; border-radius: 12rpx; margin-top: 16rpx; }
+
+.fulfillment-shipments { display: grid; gap: 12rpx; }
+.fulfillment-shipment { background: #f7faf9; border-radius: 10rpx; padding: 14rpx 18rpx; display: grid; gap: 6rpx; font-size: 26rpx; color: #54657a; }
+.fulfillment-shipment-head { display: flex; justify-content: space-between; }
+.fulfillment-company { color: #a06724; }
+.fulfillment-tracking { font-size: 24rpx; color: #7b8b85; }

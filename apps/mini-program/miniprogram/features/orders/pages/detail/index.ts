@@ -1,4 +1,6 @@
 import { getMyOrder, cancelMyOrder, payOrder, queryPaymentResult, listMyRefunds, ApiError } from '../../../../platform/order-api';
+import { getOrderFulfillment, confirmReceipt } from '../../../../platform/fulfillment-api';
+import type { MiniFulfillmentView } from '@pindian/contracts';
 import { UserAuthExpiredError } from '../../../../platform/user-auth';
 import { formatFen } from '../../../../utils/format';
 import type { MiniOrderView, MiniRefundView } from '@pindian/contracts';
@@ -8,6 +10,13 @@ const STATUS_TEXT: Record<MiniOrderView['status'], string> = {
   paid: '已支付',
   cancelled: '已取消',
   expired: '已失效'
+};
+
+const FULFILLMENT_STATUS_TEXT: Record<MiniFulfillmentView['status'], string> = {
+  pending_shipment: '待发货',
+  partially_shipped: '部分发货',
+  shipped: '已发货',
+  completed: '已完成'
 };
 
 const REFUND_STATUS_TEXT: Record<MiniRefundView['status'], string> = {
@@ -37,6 +46,10 @@ Page({
     canPaidCancel: false,
     refundItems: [] as Array<{ id: string; statusText: string; amountText: string; createdAtText: string }>,
     refundLoadError: false,
+    fulfillment: null as MiniFulfillmentView | null,
+    fulfillmentStatusText: '',
+    fulfillmentError: false,
+    confirming: false,
     countdownText: ''
   },
 
@@ -62,6 +75,7 @@ Page({
       this.applyOrder(order);
       this.startCountdown(order);
       await this.loadRefunds(order);
+      await this.loadFulfillment(order);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : '加载失败';
       this.setData({ loading: false, notFound: (cause as { status?: number }).status === 404 || message.includes('不存在'), error: message });
@@ -112,6 +126,57 @@ Page({
   retryRefunds() {
     const order = this.data.order;
     if (order) void this.loadRefunds(order);
+  },
+
+  /** 履约进度（T007 F030）：组成功后由平台生成；加载失败可重试，与空态区分。 */
+  async loadFulfillment(order: MiniOrderView) {
+    try {
+      const result = await getOrderFulfillment(order.id);
+      const fulfillment = result.fulfillmentOrder;
+      this.setData({
+        fulfillmentError: false,
+        fulfillment,
+        fulfillmentStatusText: fulfillment ? FULFILLMENT_STATUS_TEXT[fulfillment.status] : ''
+      });
+    } catch (cause) {
+      if (cause instanceof UserAuthExpiredError) throw cause;
+      this.setData({ fulfillment: null, fulfillmentStatusText: '', fulfillmentError: true });
+    }
+  },
+
+  retryFulfillment() {
+    const order = this.data.order;
+    if (order) void this.loadFulfillment(order);
+  },
+
+  /** 确认收货：仅已发货可用；幂等。 */
+  async confirmReceipt() {
+    const fulfillment = this.data.fulfillment;
+    if (!fulfillment || this.data.confirming || fulfillment.status !== 'shipped') return;
+    wx.showModal({
+      title: '确认收货',
+      content: `确认已收到全部 ${fulfillment.allocatedQuantityText} ${fulfillment.unit}？`,
+      success: (modal) => {
+        if (modal.confirm) void this.doConfirmReceipt();
+      }
+    });
+  },
+
+  async doConfirmReceipt() {
+    const fulfillment = this.data.fulfillment;
+    if (!fulfillment) return;
+    this.setData({ confirming: true });
+    try {
+      await confirmReceipt(fulfillment.fulfillmentOrderId);
+      wx.showToast({ title: '已确认收货', icon: 'success' });
+      const order = this.data.order;
+      if (order) await this.loadFulfillment(order);
+    } catch (cause) {
+      if (cause instanceof UserAuthExpiredError) wx.showToast({ title: '请先登录', icon: 'none' });
+      else wx.showToast({ title: cause instanceof ApiError || cause instanceof Error ? cause.message : '确认失败', icon: 'none' });
+    } finally {
+      this.setData({ confirming: false });
+    }
   },
 
   /** 预占到期倒计时（以后端 expiresAt 为准，本地只做展示计时）。 */

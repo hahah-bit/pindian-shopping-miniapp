@@ -1059,6 +1059,267 @@ paths:
         '403': { $ref: '#/components/responses/Error403' }
         '404': { $ref: '#/components/responses/Error404' }
         '409': { $ref: '#/components/responses/Error409' }
+  /api/admin/v1/fulfillment/groups:
+    get:
+      operationId: listFulfillmentGroups
+      security: [{ bearerAuth: [] }]
+      summary: 履约组分页（order:manage；status=组内履约单状态汇总口径：全部同一状态才归入）
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [pending_shipment, partially_shipped, shipped, completed] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: 分页履约组列表（各状态计数）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [items, total]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          required: [groupId, productId, productName, succeededAt, total, pending, partially, shipped, completed]
+                          properties:
+                            groupId: { type: string, format: uuid }
+                            productId: { type: string, format: uuid }
+                            productName: { type: string }
+                            succeededAt: { type: string, format: date-time }
+                            total: { type: integer }
+                            pending: { type: integer }
+                            partially: { type: integer }
+                            shipped: { type: integer }
+                            completed: { type: integer }
+                      total: { type: integer }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/fulfillment/groups/{id}:
+    get:
+      operationId: getFulfillmentGroup
+      security: [{ bearerAuth: [] }]
+      summary: 组内履约明细（每用户分配数量/收货脱敏/包裹运单；order:manage）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 组内履约明细
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [groupId, items]
+                    properties:
+                      groupId: { type: string, format: uuid }
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/AdminFulfillmentDetail' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/fulfillment/groups/{id}/shipments/export:
+    get:
+      operationId: exportFulfillmentShipments
+      security: [{ bearerAuth: [] }]
+      summary: 发货单导出 CSV（含收货明文；写审计 fulfillment.export；order:manage）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: CSV（UTF-8 BOM）
+          content:
+            text/csv:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/fulfillment/orders/{id}/shipments:
+    post:
+      operationId: shipFulfillmentOrder
+      security: [{ bearerAuth: [] }]
+      summary: 发货/补发（整数克；Σ非补发 ≤ 分配；运单唯一；审计；order:manage）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantityGrams, company, trackingNo]
+              properties:
+                quantityGrams: { type: integer, minimum: 1, description: 本次寄发数量（克） }
+                company: { type: string, maxLength: 30 }
+                trackingNo: { type: string, maxLength: 64 }
+                isReissue: { type: boolean, default: false, description: 补发（不计入发货进度） }
+                reason: { type: string, maxLength: 200, description: 补发原因（isReissue 必填） }
+      responses:
+        '201':
+          description: 已发货
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [shipmentId, fulfillmentOrder]
+                    properties:
+                      shipmentId: { type: string, format: uuid }
+                      fulfillmentOrder:
+                        type: object
+                        required: [id, status, shippedQuantityGrams]
+                        properties:
+                          id: { type: string, format: uuid }
+                          status: { type: string, enum: [pending_shipment, partially_shipped, shipped, completed] }
+                          shippedQuantityGrams: { type: integer }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409':
+          description: SHIPMENT_DUPLICATE_TRACKING / QUANTITY_EXCEEDS_ALLOCATION / FULFILLMENT_NOT_SHIPPABLE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/admin/v1/fulfillment/orders/{id}/receiver:
+    post:
+      operationId: updateFulfillmentReceiver
+      security: [{ bearerAuth: [] }]
+      summary: 发货前修改收货快照（version+1；审计；发货后 409 RECEIVER_LOCKED）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiverName, phone, province, city, district, detail]
+              properties:
+                receiverName: { type: string, maxLength: 20 }
+                phone: { type: string }
+                province: { type: string, maxLength: 20 }
+                city: { type: string, maxLength: 20 }
+                district: { type: string, maxLength: 20 }
+                detail: { type: string, maxLength: 120 }
+      responses:
+        '200':
+          description: 已更新（新版本）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      fulfillmentOrder:
+                        type: object
+                        properties:
+                          id: { type: string, format: uuid }
+                          receiverVersion: { type: integer }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409':
+          description: RECEIVER_LOCKED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/admin/v1/fulfillment/orders/{id}/complete:
+    post:
+      operationId: completeFulfillmentOrder
+      security: [{ bearerAuth: [] }]
+      summary: 管理员标记完成（仅 shipped；幂等；审计；order:manage）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 已完成（幂等返回现状）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      fulfillmentOrder:
+                        type: object
+                        properties:
+                          id: { type: string, format: uuid }
+                          status: { type: string, enum: [completed] }
+                          completedBy: { type: string, enum: [admin] }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409':
+          description: FULFILLMENT_NOT_SHIPPABLE（未全部发货）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+  /api/mini/v1/orders/{id}/fulfillment:
+    get:
+      operationId: getMyOrderFulfillment
+      security: [{ bearerAuth: [] }]
+      summary: 本人订单履约进度（未生成返回 fulfillmentOrder=null 空态；他人 404）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 履约视图（可为空态）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data: { $ref: '#/components/schemas/MiniFulfillmentResult' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/fulfillment-orders/{id}/confirm-receipt:
+    post:
+      operationId: confirmFulfillmentReceipt
+      security: [{ bearerAuth: [] }]
+      summary: 确认收货（本人 + shipped；幂等；completed_by=user）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200':
+          description: 已完成（幂等返回现状）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [status, completedBy]
+                    properties:
+                      status: { type: string, enum: [completed] }
+                      completedBy: { type: string, enum: [user, admin] }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409':
+          description: FULFILLMENT_NOT_SHIPPABLE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
   /api/payments/v1/notify:
     post:
       operationId: wechatPayNotify
@@ -1623,3 +1884,85 @@ components:
       properties:
         pendingReviewPayments: { type: integer, description: 金额核验不一致待人工复核的支付单数 }
         failedRefunds: { type: integer, description: 退款失败待处理单数 }
+    MiniFulfillmentResult:
+      type: object
+      required: [fulfillmentOrder, groupSummary]
+      properties:
+        fulfillmentOrder:
+          type: [object, 'null']
+          description: null = 尚未生成（组未成功或生成中）——前端空态
+          required: [fulfillmentOrderId, status, allocatedQuantityGrams, allocatedQuantityText, unit, shipments, receiverSnapshot]
+          properties:
+            fulfillmentOrderId: { type: string, format: uuid }
+            status: { type: string, enum: [pending_shipment, partially_shipped, shipped, completed] }
+            allocatedQuantityGrams: { type: integer }
+            allocatedQuantityText: { type: string, description: 斤（3 位小数） }
+            unit: { type: string }
+            shipments:
+              type: array
+              items:
+                type: object
+                required: [id, quantityGrams, quantityText, isReissue, company, trackingNo, shippedAt]
+                properties:
+                  id: { type: string, format: uuid }
+                  quantityGrams: { type: integer }
+                  quantityText: { type: string }
+                  isReissue: { type: boolean }
+                  reissueReason: { type: [string, 'null'] }
+                  company: { type: string }
+                  trackingNo: { type: string }
+                  shippedAt: { type: string, format: date-time }
+            receiverSnapshot:
+              type: object
+              required: [name, phone, province, city, district, detail]
+              properties:
+                name: { type: string }
+                phone: { type: string, description: 本人可见原文 }
+                province: { type: string }
+                city: { type: string }
+                district: { type: string }
+                detail: { type: string }
+            completedBy: { type: [string, 'null'], enum: [user, admin, null] }
+            completedAt: { type: [string, 'null'], format: date-time }
+        groupSummary:
+          type: [object, 'null']
+          properties:
+            groupId: { type: string, format: uuid }
+            status: { type: string }
+    AdminFulfillmentDetail:
+      type: object
+      required: [fulfillmentOrderId, orderId, orderNo, nickname, units, allocatedQuantityGrams, allocatedQuantityText, status, receiver, shipments]
+      properties:
+        fulfillmentOrderId: { type: string, format: uuid }
+        orderId: { type: string, format: uuid }
+        orderNo: { type: string }
+        nickname: { type: string }
+        units: { type: integer }
+        allocatedQuantityGrams: { type: integer, description: 整数克（1 斤=500g） }
+        allocatedQuantityText: { type: string, description: 斤（3 位小数） }
+        status: { type: string, enum: [pending_shipment, partially_shipped, shipped, completed] }
+        receiver:
+          type: object
+          required: [name, phoneMasked, province, city, district, detail, version]
+          properties:
+            name: { type: string }
+            phoneMasked: { type: string, description: 列表脱敏；导出 CSV 为明文且写审计 }
+            province: { type: string }
+            city: { type: string }
+            district: { type: string }
+            detail: { type: string }
+            version: { type: integer, description: 收货快照版本（管理员修改递增） }
+        shipments:
+          type: array
+          items:
+            type: object
+            required: [id, quantityGrams, quantityText, isReissue, company, trackingNo, shippedAt]
+            properties:
+              id: { type: string, format: uuid }
+              quantityGrams: { type: integer }
+              quantityText: { type: string }
+              isReissue: { type: boolean }
+              reissueReason: { type: [string, 'null'] }
+              company: { type: string }
+              trackingNo: { type: string }
+              shippedAt: { type: string, format: date-time }

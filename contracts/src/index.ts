@@ -416,3 +416,75 @@ export interface PaymentAnomaliesView {
   pendingReviewPayments: number;
   failedRefunds: number;
 }
+
+// ---------- 分份履约（T007） ----------
+
+export type FulfillmentStatus = 'pending_shipment' | 'partially_shipped' | 'shipped' | 'completed';
+
+export interface MiniShipmentView {
+  id: string;
+  quantityGrams: number;
+  quantityText: string;
+  isReissue: boolean;
+  reissueReason: string | null;
+  company: string;
+  trackingNo: string;
+  shippedAt: string;
+}
+
+/** 小程序履约进度（仅本人订单）。 */
+export interface MiniFulfillmentView {
+  fulfillmentOrderId: string;
+  status: FulfillmentStatus;
+  allocatedQuantityGrams: number;
+  allocatedQuantityText: string;
+  unit: string;
+  shipments: MiniShipmentView[];
+  receiverSnapshot: { name: string; phone: string; province: string; city: string; district: string; detail: string };
+  completedBy: 'user' | 'admin' | null;
+  completedAt: string | null;
+}
+
+export interface MiniFulfillmentResult {
+  /** null = 尚未生成（组未成功或生成中）——前端空态 */
+  fulfillmentOrder: MiniFulfillmentView | null;
+  groupSummary: { groupId: string; status: string } | null;
+}
+
+/** 后台履约组摘要（列表行）。 */
+export interface AdminFulfillmentGroupSummary {
+  groupId: string;
+  productId: string;
+  productName: string;
+  succeededAt: string;
+  total: number;
+  pending: number;
+  partially: number;
+  shipped: number;
+  completed: number;
+}
+
+export interface AdminShipmentView {
+  id: string;
+  quantityGrams: number;
+  quantityText: string;
+  isReissue: boolean;
+  reissueReason: string | null;
+  company: string;
+  trackingNo: string;
+  shippedAt: string;
+}
+
+/** 后台履约组明细行（电话脱敏）。 */
+export interface AdminFulfillmentDetail {
+  fulfillmentOrderId: string;
+  orderId: string;
+  orderNo: string;
+  nickname: string;
+  units: number;
+  allocatedQuantityGrams: number;
+  allocatedQuantityText: string;
+  status: FulfillmentStatus;
+  receiver: { name: string; phoneMasked: string; province: string; city: string; district: string; detail: string; version: number };
+  shipments: AdminShipmentView[];
+}

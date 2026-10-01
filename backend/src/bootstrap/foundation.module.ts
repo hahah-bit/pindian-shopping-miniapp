@@ -105,6 +105,12 @@ import { PostgresRefundRepository } from '../contexts/payments/adapters/outbound
 import { ConfirmPaymentWorkflow } from '../workflows/payment-confirm.workflow';
 import { CreateFullRefundUseCase, CancelPaidOrderWorkflow, RetryRefund, RefundResultConfirmer } from '../contexts/payments/application/refund-flow';
 import { MiniRefundQueries } from '../contexts/payments/application/mini-refund-views';
+import { ShipFulfillmentUseCase, UpdateReceiverUseCase, CompleteFulfillmentUseCase } from '../contexts/fulfillment/application/admin-fulfillment';
+import { AdminFulfillmentQueries } from '../contexts/fulfillment/application/admin-fulfillment-queries';
+import { MiniFulfillmentQueries, ConfirmReceiptUseCase } from '../contexts/fulfillment/application/mini-fulfillment';
+import { PostgresFulfillmentRepository } from '../contexts/fulfillment/adapters/outbound/postgres/fulfillment-repository';
+import { AdminFulfillmentController } from '../contexts/fulfillment/adapters/inbound/admin/fulfillment.controller';
+import { MiniFulfillmentController } from '../contexts/fulfillment/adapters/inbound/mini/mini-fulfillment.controller';
 import { AdminPayRefundQueries } from '../contexts/payments/application/admin-pay-refund-queries';
 import { contexts } from './context-registry';
 import { readConfig } from './config';
@@ -130,7 +136,9 @@ import { TOKENS } from './injection-tokens';
     MiniPayController,
     NotifyController,
     AdminOrderGroupController,
-    AdminPayRefundController
+    AdminPayRefundController,
+    AdminFulfillmentController,
+    MiniFulfillmentController,
   ],
   providers: [
     { provide: TOKENS.PgPool, useFactory: () => new Pool({ connectionString: readConfig().databaseUrl, max: 10 }) },
@@ -313,6 +321,15 @@ import { TOKENS } from './injection-tokens';
     { provide: 'ADMIN_ORDER_QUERIES', useFactory: (orders: OrderRepository, users) => new AdminOrderQueries({ orders, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }), inject: ['ORDER_REPOSITORY', 'USER_REPOSITORY'] },
     { provide: 'ADMIN_GROUP_QUERIES', useFactory: (groups, reservations, orders, users) => new AdminGroupQueries({ groups, reservations, orders, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }), inject: ['GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'ORDER_REPOSITORY', 'USER_REPOSITORY'] },
     { provide: 'ADMIN_PAY_REFUND_QUERIES', useFactory: (payments, refunds, users) => new AdminPayRefundQueries({ payments, refunds, nicknameOf: (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）') }), inject: ['PAYMENT_REPOSITORY', 'REFUND_REPOSITORY', 'USER_REPOSITORY'] },
+    // T007 履约（F027-F030）
+    { provide: 'FULFILLMENT_ORDER_REPOSITORY', useFactory: (pool: Pool) => new PostgresFulfillmentRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'FULFILLMENT_AUDIT', useExisting: RecordOperation },
+    { provide: ShipFulfillmentUseCase, useFactory: (repo, audit, pool: Pool, clock) => new ShipFulfillmentUseCase({ fulfillmentOrders: repo, audit, runner: new PostgresTransactionRunner(pool), clock }), inject: ['FULFILLMENT_ORDER_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: UpdateReceiverUseCase, useFactory: (repo, audit, pool: Pool, clock) => new UpdateReceiverUseCase({ fulfillmentOrders: repo, audit, runner: new PostgresTransactionRunner(pool), clock }), inject: ['FULFILLMENT_ORDER_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: CompleteFulfillmentUseCase, useFactory: (repo, audit, pool: Pool, clock) => new CompleteFulfillmentUseCase({ fulfillmentOrders: repo, audit, runner: new PostgresTransactionRunner(pool), clock }), inject: ['FULFILLMENT_ORDER_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: 'ADMIN_FULFILLMENT_QUERIES', useFactory: (pool: Pool, users) => new AdminFulfillmentQueries(pool, (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）')), inject: [TOKENS.PgPool, 'USER_REPOSITORY'] },
+    { provide: MiniFulfillmentQueries, useFactory: (orders, repo: PostgresFulfillmentRepository) => new MiniFulfillmentQueries({ orders, fulfillmentOrders: repo, shipments: repo, groups: repo }), inject: ['ORDER_REPOSITORY', 'FULFILLMENT_ORDER_REPOSITORY'] },
+    { provide: ConfirmReceiptUseCase, useFactory: (repo, pool: Pool, clock) => new ConfirmReceiptUseCase({ fulfillmentOrders: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['FULFILLMENT_ORDER_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
     // 跨上下文工作流
     {
       provide: CreateProductWorkflow,

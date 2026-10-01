@@ -43,6 +43,32 @@
       <view class="hint">地址后续修改不影响本订单。</view>
     </view>
 
+    <view wx:if="{{fulfillmentError}}" class="card">
+      <view class="section-title">履约进度</view>
+      <view class="state error-state"><text>履约进度加载失败</text><button bindtap="retryFulfillment" type="button">重试</button></view>
+    </view>
+
+    <view wx:if="{{fulfillment}}" class="card">
+      <view class="row1">
+        <view class="section-title">履约进度</view>
+        <text class="status">{{fulfillmentStatusText}}</text>
+      </view>
+      <view class="amount-row"><text>应发数量</text><text>{{fulfillment.allocatedQuantityText}} {{fulfillment.unit}}</text></view>
+      <view wx:if="{{fulfillment.shipments.length}}" class="fulfillment-shipments">
+        <view wx:for="{{fulfillment.shipments}}" wx:key="id" class="fulfillment-shipment">
+          <view class="fulfillment-shipment-head">
+            <text>{{item.isReissue ? '补发包裹' : '包裹'}} · {{item.quantityText}} {{fulfillment.unit}}</text>
+            <text class="fulfillment-company">{{item.company}}</text>
+          </view>
+          <view class="fulfillment-tracking">运单号 {{item.trackingNo}}</view>
+          <view wx:if="{{item.isReissue}}" class="hint">补发原因：{{item.reissueReason}}</view>
+        </view>
+      </view>
+      <view wx:else class="hint">商品正在备货中，发货后此处展示包裹与运单。</view>
+      <button wx:if="{{fulfillment.status === 'shipped'}}" class="pay-btn" bindtap="confirmReceipt" loading="{{confirming}}" disabled="{{confirming}}">确认收货</button>
+      <view wx:if="{{fulfillment.status === 'completed'}}" class="hint">已完成（{{fulfillment.completedBy === 'user' ? '本人确认' : '平台标记'}}）</view>
+    </view>
+
     <view wx:if="{{refundLoadError}}" class="card">
       <view class="section-title">退款进度</view>
       <view class="state error-state"><text>退款进度加载失败</text><button bindtap="retryRefunds" type="button">重试</button></view>

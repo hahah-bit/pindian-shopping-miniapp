@@ -187,6 +187,13 @@ export class PostgresFulfillmentRepository implements FulfillmentOrderRepository
     });
   }
 
+  async findGroupStatus(groupId: string): Promise<{ groupId: string; status: string } | null> {
+    return this.query(async (client) => {
+      const { rows } = await client.query<{ id: string; status: string }>('SELECT id, status FROM groups WHERE id = $1', [groupId]);
+      return rows[0] ? { groupId: rows[0].id, status: rows[0].status } : null;
+    });
+  }
+
   async listPaidByGroup(groupId: string): Promise<Array<{
     orderId: string;
     userId: string;

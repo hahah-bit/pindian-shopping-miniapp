@@ -1,4 +1,4 @@
-import type { AdminGroupListItem, AdminOrderListItem, AdminPhoneReveal, AdminUserListItem, AdminProductListItem, AdminProductView, ApiResponse, CreateProductRequest, LoginResponse, MediaAssetAdminView, MediaAssetView, MiniProductListItem, MiniProductView, PageView, PlatformInfo, StockAdjustmentRequest, StockAdjustmentResult, StockMovementView, StockView, UpdateProductRequest, AdminPaymentListItem, AdminRefundListItem, PaymentAnomaliesView } from '@pindian/contracts';
+import type { AdminGroupListItem, AdminOrderListItem, AdminPhoneReveal, AdminUserListItem, AdminProductListItem, AdminProductView, ApiResponse, CreateProductRequest, LoginResponse, MediaAssetAdminView, MediaAssetView, MiniProductListItem, MiniProductView, PageView, PlatformInfo, StockAdjustmentRequest, StockAdjustmentResult, StockMovementView, StockView, UpdateProductRequest, AdminPaymentListItem, AdminRefundListItem, PaymentAnomaliesView, AdminFulfillmentGroupSummary, AdminFulfillmentDetail } from '@pindian/contracts';
 
 /** 结构化 API 错误：携带后端错误码与原因清单。 */
 export class ApiClientError extends Error {
@@ -230,4 +230,30 @@ export async function getPaymentAnomalies(): Promise<PaymentAnomaliesView> {
 
 export async function retryAdminRefund(id: string, reason: string): Promise<{ status: string }> {
   return request<{ status: string }>(`/api/admin/v1/refunds/${id}/retry`, { method: 'POST', body: JSON.stringify({ reason }) });
+}
+
+// ---------- 履约管理（T007） ----------
+
+export async function listFulfillmentGroups(query: { status?: string; page?: number; pageSize?: number } = {}): Promise<PageView<AdminFulfillmentGroupSummary>> {
+  const params = new URLSearchParams();
+  if (query.status) params.set('status', query.status);
+  params.set('page', String(query.page ?? 1));
+  params.set('pageSize', String(query.pageSize ?? 10));
+  return request<PageView<AdminFulfillmentGroupSummary>>(`/api/admin/v1/fulfillment/groups?${params.toString()}`);
+}
+
+export async function getFulfillmentGroup(id: string): Promise<{ groupId: string; items: AdminFulfillmentDetail[] }> {
+  return request(`/api/admin/v1/fulfillment/groups/${id}`);
+}
+
+export async function shipFulfillmentOrder(id: string, body: { quantityGrams: number; company: string; trackingNo: string; isReissue?: boolean; reason?: string }): Promise<{ shipmentId: string; fulfillmentOrder: { id: string; status: string; shippedQuantityGrams: number } }> {
+  return request(`/api/admin/v1/fulfillment/orders/${id}/shipments`, { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function completeFulfillmentOrder(id: string): Promise<{ fulfillmentOrder: { id: string; status: string; completedBy: string } }> {
+  return request(`/api/admin/v1/fulfillment/orders/${id}/complete`, { method: 'POST', body: '{}' });
+}
+
+export function exportShipmentsCsv(groupId: string): string {
+  return `/api/admin/v1/fulfillment/groups/${groupId}/shipments/export`;
 }
