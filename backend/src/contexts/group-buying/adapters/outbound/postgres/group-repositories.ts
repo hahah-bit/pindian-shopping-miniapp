@@ -187,8 +187,8 @@ export class PostgresShareReservationRepository implements ShareReservationRepos
     ));
   }
 
-  async findByOrderId(orderId: string): Promise<ShareReservation | null> {
-    return this.query(async (client) => {
+  async findByOrderId(orderId: string, sessionTx?: unknown): Promise<ShareReservation | null> {
+    return withExecutor((sessionTx as PgExecutor) ?? this.pool, async (client) => {
       const { rows } = await client.query<ReservationRow>('SELECT * FROM share_reservations WHERE order_id = $1', [orderId]);
       return rows[0] ? reservationOf(rows[0]) : null;
     });

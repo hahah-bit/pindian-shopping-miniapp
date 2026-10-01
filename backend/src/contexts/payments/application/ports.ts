@@ -35,10 +35,11 @@ export interface GroupPayabilityPort {
 }
 
 export interface PaymentRepository {
-  insert(payment: Payment): Promise<void>;
-  findByOrderId(orderId: string): Promise<Payment | null>;
-  findById(paymentId: string): Promise<Payment | null>;
-  save(payment: Payment): Promise<void>;
+  insert(payment: Payment, sessionTx?: unknown): Promise<void>;
+  findByOrderId(orderId: string, sessionTx?: unknown): Promise<Payment | null>;
+  findById(paymentId: string, sessionTx?: unknown): Promise<Payment | null>;
+  /** sessionTx：与外层事务（支付确认/退款建单）同连接，回滚时支付事实一并回滚（第三轮 R11）。 */
+  save(payment: Payment, sessionTx?: unknown): Promise<void>;
   /** 查询补偿：超静默期未更新的 processing/unknown 单。 */
   findStale(now: Date, limit: number): Promise<Payment[]>;
   /** 后台异常统计。 */

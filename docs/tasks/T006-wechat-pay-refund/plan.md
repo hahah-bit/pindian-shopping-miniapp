@@ -56,3 +56,11 @@ spec AC01–AC11 满足（AC11 中真实商户渠道验证如实记录为待用�
 - [x] R7 刷新语义：POST :id/payment-result 在 processing/unknown 时触发渠道查单并走确认流程（AC06）。
 - [x] R8 A04 小程序退款进度：cancelled/expired 同样查询展示；区分"查询失败"与"无退款记录"（AC06）。
 - [x] R9 文档回写（ddd/spec/plan/verification + 微信官方文档核验记录）→ 提交。
+
+## 第三轮修复（2026-10-01 第二轮独立复验：生产事务贯穿）
+
+- [x] R10 真实 PG 回归（生产仓储+真实 BEGIN/ROLLBACK）：迟到支付退款建单失败 → 支付单必须回滚为 processing；恢复后重放恰一笔全额退款；再次重放不重复（先红）。
+- [x] R11 PaymentRepository 端口与 Postgres 适配器贯穿 sessionTx（save/insert/findByOrderId/findById）；CreateFullRefundUseCase 事务内支付读贯穿（修复贯穿后暴露的一致性读缺口）；确认工作流传参核实。
+- [x] R12 库存端口事务审查与修复：reserveOne/consumeOne/releaseOne 贯穿 sessionTx；故障注入（组成功落账失败→库存不变；组截止释放失败→库存不变；建组插入失败→预留不变）先红后绿。
+- [x] R13 集成补回调与查询并发 exactly-once（notify 与 payment-result 并发，容量只加一次）。
+- [x] R14 文档回写与提交（verification 第三轮记录）。

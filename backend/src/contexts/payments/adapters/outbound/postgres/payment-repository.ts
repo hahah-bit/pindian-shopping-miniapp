@@ -48,31 +48,37 @@ export class PostgresPaymentRepository implements PaymentRepository {
     return withExecutor(this.pool, work);
   }
 
-  async insert(payment: Payment): Promise<void> {
+  /** 有外层事务时在会话连接上执行（与支付确认/退款建单同事务，第三轮 R11）。 */
+  private async queryIn<T>(sessionTx: unknown, work: (client: PoolClient) => Promise<T>): Promise<T> {
+    if (sessionTx) return withExecutor(sessionTx as PgExecutor, work);
+    return this.query(work);
+  }
+
+  async insert(payment: Payment, sessionTx?: unknown): Promise<void> {
     const s = payment.state;
-    await this.query((client) => client.query(
+    await this.queryIn(sessionTx, (client) => client.query(
       `INSERT INTO payments (${COLUMNS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [s.paymentId, s.orderId, s.userId, s.amountFen, s.status, s.outTradeNo, s.channelTransactionId, s.appliedResult, s.prepayId, s.prepayExpiresAt, s.successSource, s.channelPayload ? JSON.stringify(s.channelPayload) : null, s.createdAt, s.updatedAt]
     ));
   }
 
-  async findByOrderId(orderId: string): Promise<Payment | null> {
-    return this.query(async (client) => {
+  async findByOrderId(orderId: string, sessionTx?: unknown): Promise<Payment | null> {
+    return this.queryIn(sessionTx, async (client) => {
       const { rows } = await client.query<PaymentRow>(`SELECT ${COLUMNS} FROM payments WHERE order_id = $1`, [orderId]);
       return rows[0] ? paymentOf(rows[0]) : null;
     });
   }
 
-  async findById(paymentId: string): Promise<Payment | null> {
-    return this.query(async (client) => {
+  async findById(paymentId: string, sessionTx?: unknown): Promise<Payment | null> {
+    return this.queryIn(sessionTx, async (client) => {
       const { rows } = await client.query<PaymentRow>(`SELECT ${COLUMNS} FROM payments WHERE id = $1`, [paymentId]);
       return rows[0] ? paymentOf(rows[0]) : null;
     });
   }
 
-  async save(payment: Payment): Promise<void> {
+  async save(payment: Payment, sessionTx?: unknown): Promise<void> {
     const s = payment.state;
-    await this.query((client) => client.query(
+    await this.queryIn(sessionTx, (client) => client.query(
       `UPDATE payments SET status = $2, channel_transaction_id = $3, applied_result = $4, prepay_id = $5, prepay_expires_at = $6, success_source = $7, channel_payload = $8, updated_at = $9 WHERE id = $1`,
       [s.paymentId, s.status, s.channelTransactionId, s.appliedResult, s.prepayId, s.prepayExpiresAt, s.successSource, s.channelPayload ? JSON.stringify(s.channelPayload) : null, s.updatedAt]
     ));

@@ -80,7 +80,7 @@ export class FailDeadlineGroupsTask {
           }
           const failed = locked.markFailed(now);
           await this.deps.groups.save(failed, sessionTx);
-          await this.deps.stocks.releaseOne(failed.state.productId, `group-release:${failed.state.groupId}`);
+          await this.deps.stocks.releaseOne(failed.state.productId, `group-release:${failed.state.groupId}`, sessionTx);
           return true;
         });
         if (released) processed++;

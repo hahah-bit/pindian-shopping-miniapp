@@ -15,7 +15,7 @@ export interface ConfirmPaymentDeps {
     recordSettlement(input: { groupId: string; expectedTotalFen: number; settledTotalFen: number; diffFen: number; now: Date }, sessionTx?: unknown): Promise<void>;
   };
   reservations: {
-    findByOrderId(orderId: string): Promise<ShareReservation | null>;
+    findByOrderId(orderId: string, sessionTx?: unknown): Promise<ShareReservation | null>;
     save(reservation: ShareReservation, sessionTx?: unknown): Promise<void>;
   };
   orders: {
@@ -28,7 +28,7 @@ export interface ConfirmPaymentDeps {
     save(payment: Payment, sessionTx?: unknown): Promise<void>;
   };
   refunds: RefundCreationPort;
-  stocks: { consumeOne(productId: string, businessKey: string): Promise<void> };
+  stocks: { consumeOne(productId: string, businessKey: string, sessionTx?: unknown): Promise<void> };
   runner: { run<T>(work: (sessionTx: unknown) => Promise<T>): Promise<T> };
   clock: Clock;
 }
@@ -79,7 +79,7 @@ export class ConfirmPaymentWorkflow {
       if (lockedOrder.state.status !== 'unpaid') return { applied: false, reason: 'order_not_unpaid' as const };
       const lockedGroup = await this.deps.groups.findByIdForUpdate(lockedOrder.state.groupId, sessionTx);
       if (!lockedGroup || !lockedGroup.isOpen || lockedGroup.state.deadline <= now) return { applied: false, reason: 'group_closed' as const };
-      const reservation = await this.deps.reservations.findByOrderId(lockedOrder.state.orderId);
+      const reservation = await this.deps.reservations.findByOrderId(lockedOrder.state.orderId, sessionTx);
       if (!reservation || reservation.state.status !== 'reserved') return { applied: false, reason: 'no_reservation' as const };
       // 预占过期检查（任务未跑时兜底，D008）
       if (!reservation.isActive(now)) return { applied: false, reason: 'reservation_expired' as const };
@@ -96,7 +96,7 @@ export class ConfirmPaymentWorkflow {
       await this.deps.orders.save(paidOrder, sessionTx);
       await this.deps.payments.save(succeeded.markAppliedResult('applied'), sessionTx);
       if (finalGroup.state.status === 'success') {
-        await this.deps.stocks.consumeOne(finalGroup.state.productId, `group-consume:${finalGroup.state.groupId}`);
+        await this.deps.stocks.consumeOne(finalGroup.state.productId, `group-consume:${finalGroup.state.groupId}`, sessionTx);
         // D006 让利台账：expected = 组售价快照（原价+服务费）；settled = 组累计已支付；diff 可追溯
         await this.deps.groups.recordSettlement({
           groupId: finalGroup.state.groupId,

@@ -315,12 +315,22 @@ test('T006 集成：强制验签回调、刷新查单、组截止退款、迟到
   assert.equal((await paymentRow(o1.data.id)).status, 'processing');
   assert.equal(wxRequests[0].url, '/v3/pay/transactions/jsapi', '真实适配器发起官方下单路径');
 
-  // 回调 SUCCESS（真实签名）→ 生效：订单 paid / 预占转换 / 组 paid 20
+  // 回调与查询并发（第三轮 R13）：两条通道同时触发确认 → exactly-once，容量只加一次
+  const [concurrentNotify, concurrentRefresh] = await Promise.all([
+    sendNotify(o1.data.id, 16833),
+    refreshResult('ua', o1.data.id)
+  ]);
+  assert.equal(concurrentNotify.status, 200);
+  assert.equal(concurrentRefresh.status, 200);
+  assert.equal((await paymentRow(o1.data.id)).status, 'succeeded');
+  assert.equal((await paymentRow(o1.data.id)).applied_result, 'applied');
+  assert.equal((await groupRow(groupId)).paid_units, 20, '并发确认 exactly-once：paid 0→20 仅一次');
+
+  // 回调 SUCCESS（重复通知幂等）→ 状态保持
   const notify1 = await sendNotify(o1.data.id, 16833);
   assert.equal(notify1.status, 200);
   assert.equal((await paymentRow(o1.data.id)).status, 'succeeded');
-  assert.equal((await paymentRow(o1.data.id)).applied_result, 'applied');
-  assert.equal((await groupRow(groupId)).paid_units, 20, '预占转换：paid 0→20');
+  assert.equal((await groupRow(groupId)).paid_units, 20, '预占转换：paid 20 不变');
   const o1After = await (await fetch(`${base}/api/mini/v1/orders/${o1.data.id}`, { headers: users.ua.auth })).json();
   assert.equal(o1After.data.status, 'paid');
 

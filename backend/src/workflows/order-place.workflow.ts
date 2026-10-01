@@ -37,10 +37,11 @@ export interface ProductSnapshotPort {
   getSellableSnapshot(productId: string): Promise<{ productId: string; snapshot: SalePolicySnapshot; deadlineHours: number } | null>;
 }
 
+/** sessionTx：库存变动与外层事务同连接（第三轮 R12）。 */
 export interface StockReservationPort {
-  reserveOne(productId: string, businessKey: string): Promise<void>;
-  releaseOne(productId: string, businessKey: string): Promise<void>;
-  consumeOne(productId: string, businessKey: string): Promise<void>;
+  reserveOne(productId: string, businessKey: string, sessionTx?: unknown): Promise<void>;
+  releaseOne(productId: string, businessKey: string, sessionTx?: unknown): Promise<void>;
+  consumeOne(productId: string, businessKey: string, sessionTx?: unknown): Promise<void>;
 }
 
 export interface PlaceOrderDeps {
@@ -187,7 +188,7 @@ export class PlaceOrderWorkflow {
     const result = await this.deps.runner.run(async (sessionTx) => {
       const groupId = this.deps.generateId();
       const stockKey = `group-create:${groupId}`;
-      await this.deps.stocks.reserveOne(ctx.productId, stockKey);
+      await this.deps.stocks.reserveOne(ctx.productId, stockKey, sessionTx);
       const group = Group.create({ groupId, productId: ctx.productId, snapshot: sellable.snapshot, deadline: ctx.deadline, now: ctx.now });
       const quote = computeQuote({ originalPriceFen: group.state.snapshot.originalPriceFen, units: ctx.units, isFinalOrder: false, groupPaidAmountFen: 0, groupPaidGoodsFen: 0 });
       const order = this.buildOrder({ groupId, productId: ctx.productId, userId: ctx.userId, units: ctx.units, quote, snapshot: this.snapshotOf(group), address: ctx.address, idempotencyKey: ctx.idempotencyKey, reservationExpiresAt: ctx.reservationExpiresAt, now: ctx.now });

@@ -1,6 +1,6 @@
 # T006 实际验收记录
 
-> 2026-10-01 独立验收结论：未通过（见 [independent-acceptance.md](independent-acceptance.md)）。同日按其缺口清单完成修复复验（本记录第二轮），全部缺口已修复并以先红后绿回归 + 真实 PG/HTTP 集成覆盖；**独立复验由验收方执行，本记录为开发自测**。
+> 2026-10-01 独立验收历程：第一轮未通过（A01–A05）→ 第二轮修复后独立复验仍未通过（生产事务缺陷，基线 8c86e9d）→ 第三轮修复（本记录），以**生产仓储 + 真实 BEGIN/ROLLBACK** 故障回归收口。历次结论与证据见 [independent-acceptance.md](independent-acceptance.md)；独立复验由验收方执行，本记录为开发自测。
 
 日期：2026-10-01（Asia/Shanghai）。第二轮：针对独立验收 A01–A05 及附加验证项（事务边界/退款回调/刷新语义）逐项修复。结论：**修复完成、自测通过；真实商户渠道与真机仍待用户环境，不标记渠道已验证**。
 
@@ -16,6 +16,38 @@
 | A05 让利台账缺失 | 迁移 0015 `group_settlements`（group_id 唯一幂等）；组 success 同事务落账 expected（整件售价快照）/settled（Σ已支付订单应付）/diff（让利）；组截止失败不落账 | payment-confirm 单测（落账字段+同事务+未满不落账）；集成场景 1：20×20×20 → expected 50500 / settled 50499 / **diff 1 可追溯**；场景 5：仅 success 组有台账 |
 | 退款回调缺失（附加） | notify 按 event_type 分发：TRANSACTION.* → 支付确认；REFUND.SUCCESS/ABNORMAL/CLOSED → `RefundResultConfirmer`（渠道退款单号随证据落库）；未知类型受理不处理 | 集成场景 2/3：退款回调（真实签名+加密，AAD=refund）→ succeeded 且 channel_refund_id 落库（wxr-cb-1/wxr-cb-2）；notify-verify 单测覆盖 REFUND.SUCCESS 解密 |
 | 刷新≠查单（附加） | `PaymentQueryResult` 在 payment 处于 processing/unknown 时主动渠道查单并走确认流程；已成功不查渠道；查询失败返回本地事实（补偿任务兜底） | payment-refresh 单测 3/3；集成场景 1：processing 单刷新 → 官方查单路径 → applied/paid；已支付刷新不再访问渠道 |
+
+## 第三轮修复（2026-10-01 第二轮独立复验：生产事务贯穿）
+
+第二轮复验以真实 PostgreSQL 故障探针证明：`PostgresPaymentRepository.save` 忽略 sessionTx（走连接池独立连接），退款建单失败后外层 ROLLBACK 无法撤销已写入的 succeeded/refunded_not_applied，重复回调被 succeeded 早退挡住；既有 Fake 回滚测试（RollbackRunner 手动恢复状态）掩盖了生产适配器缺陷。本轮修复与证据：
+
+### 新增真实 PG 回归（先红后绿，tests/task-suites/t006/confirm-tx.test.mjs）
+
+生产类 + 生产仓储 + `PostgresTransactionRunner` 真实 BEGIN/ROLLBACK，独立测试库 `pindian_t006_tx_test`，不触主库：
+
+1. **迟到支付退款建单失败（A03 生产证据复现→修复）**：注入退款建单抛错 → 外层回滚 → 支付单**必须停留 processing、无残留 applied_result、无退款单**（修复前实际 succeeded——红）；恢复后重放同一事实 → 恰好一笔全额退款（16833 分/late_payment/requested）；第三次重放幂等返回不重复建单。
+2. **库存消耗随外层回滚（R12 源码风险→故障证实→修复）**：组成功路径注入结算落账失败（消耗之后、事务内最后一步）→ 回滚后订单 unpaid、预占 reserved、组 paid_units=40、支付 processing、**stocks available/reserved 恢复 (2,1)、stock_movements 无 group-consume 行**（修复前实际 (2,0)——红）；恢复后重放恰好消耗一次（台账 1 条、组 success）。
+
+### 修复内容
+
+- `PaymentRepository` 端口与 Postgres 适配器：`save/insert/findByOrderId/findById` 贯穿 sessionTx（`queryIn`：有会话用会话连接，缺省回退池连接）。
+- **贯穿后暴露的一致性读缺口**：`CreateFullRefundUseCase` 事务外读支付单会看到未提交前的 processing → 其 `findById` 亦随 sessionTx（事务内读）。
+- `StockReservationPort`（reserveOne/consumeOne/releaseOne）贯穿 sessionTx：建组预留（下单事务）、组成功消耗（确认事务）、组截止释放（截止事务）与外层同生共死；业务键幂等（movement 唯一约束）不变。预占 `findByOrderId` 事务内读贯穿。
+- 端口声明同步：order-place.workflow / payment-confirm.workflow / order-expiry.tasks / catalog-stock-adapters。
+
+### 并发与重复（集成，真实 HTTP）
+
+- **回调与查询并发 exactly-once**：`Promise.all([notify, payment-result 刷新])` → 两者 200，支付 succeeded/applied、组 paid_units 0→20 仅一次。
+- 重复回调幂等（同事实再投递）与已支付刷新不访问渠道：既有断言保持通过。
+
+### 本轮结果
+
+| 验证 | 结果 |
+| --- | --- |
+| 专项 `npm run test:task:t006` | **51/51，0 跳过**（新增 confirm-tx 真实 PG 回归 2） |
+| 全量 `npm test` | **170/170，0 失败 0 跳过**（T001–T004 回归实跑） |
+| Docker 冒烟 | 4 容器 healthy；主库 0001–0015；Worker 五任务运行；无签名回调 400；API ready 200 |
+| 未验证项 | 真实商户渠道、微信开发者工具/真机（无配置/无环境）；平台证书多序列号轮换 |
 
 ## 官方文档核验（2026-10-01）
 

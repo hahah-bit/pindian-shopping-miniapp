@@ -14,10 +14,11 @@ export interface ProductSellableSnapshot {
   deadlineHours: number;
 }
 
+/** sessionTx：与外层事务同连接执行，回滚时库存变动一并回滚（第三轮 R12）。 */
 export interface StockReservationPort {
-  reserveOne(productId: string, businessKey: string): Promise<void>;
-  releaseOne(productId: string, businessKey: string): Promise<void>;
-  consumeOne(productId: string, businessKey: string): Promise<void>;
+  reserveOne(productId: string, businessKey: string, sessionTx?: unknown): Promise<void>;
+  releaseOne(productId: string, businessKey: string, sessionTx?: unknown): Promise<void>;
+  consumeOne(productId: string, businessKey: string, sessionTx?: unknown): Promise<void>;
 }
 
 export function getProductSnapshotPort(pool: PgExecutor): { getSellableSnapshot(productId: string): Promise<ProductSellableSnapshot | null> } {
@@ -62,9 +63,9 @@ function normalizeQuantity(text: string): string {
 export function getStockReservationPort(pool: PgExecutor): StockReservationPort {
   const ID_KEY = /^[a-z-]+:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   return {
-    async reserveOne(productId, businessKey) {
+    async reserveOne(productId, businessKey, sessionTx) {
       if (!ID_KEY.test(businessKey)) throw new ApplicationError('VALIDATION_FAILED', '库存幂等键格式无效');
-      await withExecutor(pool, async (client) => {
+      await withExecutor((sessionTx as PgExecutor) ?? pool, async (client) => {
         const adjust = await client.query(
           `UPDATE stocks SET available_whole_items = available_whole_items - 1, reserved_whole_items = reserved_whole_items + 1, updated_at = now()
            WHERE product_id = $1 AND available_whole_items > 0`,
@@ -82,9 +83,9 @@ export function getStockReservationPort(pool: PgExecutor): StockReservationPort 
         });
       });
     },
-    async releaseOne(productId, businessKey) {
+    async releaseOne(productId, businessKey, sessionTx) {
       if (!ID_KEY.test(businessKey)) throw new ApplicationError('VALIDATION_FAILED', '库存幂等键格式无效');
-      await withExecutor(pool, async (client) => {
+      await withExecutor((sessionTx as PgExecutor) ?? pool, async (client) => {
         const adjust = await client.query(
           `UPDATE stocks SET available_whole_items = available_whole_items + 1, reserved_whole_items = GREATEST(reserved_whole_items - 1, 0), updated_at = now()
            WHERE product_id = $1 AND reserved_whole_items > 0`,
@@ -102,9 +103,9 @@ export function getStockReservationPort(pool: PgExecutor): StockReservationPort 
         });
       });
     },
-    async consumeOne(productId, businessKey) {
+    async consumeOne(productId, businessKey, sessionTx) {
       if (!ID_KEY.test(businessKey)) throw new ApplicationError('VALIDATION_FAILED', '库存幂等键格式无效');
-      await withExecutor(pool, async (client) => {
+      await withExecutor((sessionTx as PgExecutor) ?? pool, async (client) => {
         const adjust = await client.query(
           `UPDATE stocks SET reserved_whole_items = GREATEST(reserved_whole_items - 1, 0), updated_at = now()
            WHERE product_id = $1 AND reserved_whole_items > 0`,

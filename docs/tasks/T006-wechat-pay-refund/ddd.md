@@ -294,3 +294,9 @@ nonce
 
 - 退款结果通知与支付通知共用 `POST /api/payments/v1/notify`，按 `event_type` 分发：TRANSACTION.SUCCESS → 支付确认；REFUND.SUCCESS/ABNORMAL/CLOSED → RefundResultConfirmer（渠道证据）。验签解密要求与 8.1 相同（官方：退款结果通知，核验 2026-10-01）。
 - 前端"刷新支付结果"= 后端主动渠道查单：payment 处于 processing/unknown 时查询渠道并走确认流程，再返回订单投影；支付已成功则直接返回本地事实。
+
+### 8.6 生产事务贯穿修订（2026-10-01 第三轮，第二轮独立复验 A03）
+
+- **仓储事务参数是端口契约的一部分**：凡在工作流事务内调用的仓储方法（PaymentRepository.save/insert、RefundRepository.insert/save、Group/Order/Reservation 的 save 与事务内读），适配器必须在使用传入 sessionTx 的连接上执行；`sessionTx` 缺省时才回退自有连接。Fake 仓储的"手动回滚"不能证明生产适配器满足该契约——事务回归必须用生产仓储 + 真实 BEGIN/ROLLBACK。
+- **库存端口同属事务边界**（本轮审查发现同类缺陷）：`StockReservationPort.reserveOne/consumeOne/releaseOne` 在建组/组成功/组截止事务内调用，原实现走连接池自动提交——外层回滚会留下"组未建而库存已预留/组未成功而整件已消耗/组未失败而整件已释放"的脏状态。修订后三方法贯穿 sessionTx，与外层事务同生共死；业务键幂等（movement 唯一约束）保持不变。
+- 恢复语义（重申）：迟到支付退款建单失败 → 整个事务回滚 → 支付单停留 processing → 重复回调/查询补偿重放 → 恰好一笔全额退款；第三次重放被 succeeded 早退挡住。

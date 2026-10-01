@@ -33,7 +33,8 @@ export class CreateFullRefundUseCase {
   async execute(input: { paymentId: unknown; orderId: unknown; userId: unknown; reason: 'user_cancel' | 'group_failed' | 'late_payment' }, sessionTx?: unknown): Promise<{ refundId: string }> {
     const paymentId = uuidOf(input.paymentId, '支付单 ID');
     const orderId = uuidOf(input.orderId, '订单 ID');
-    const payment = await this.deps.payments.findById(paymentId);
+    // 事务内读：迟到支付路径中支付事实在同一事务内刚写入，必须用会话连接读取（第三轮 R11）
+    const payment = await this.deps.payments.findById(paymentId, sessionTx);
     if (!payment || payment.state.status !== 'succeeded') {
       throw new ApplicationError('REFUND_NOT_ALLOWED', '无已成功的支付事实，不能退款');
     }
