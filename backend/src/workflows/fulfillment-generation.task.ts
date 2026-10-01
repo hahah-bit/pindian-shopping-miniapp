@@ -1,0 +1,87 @@
+import type { Clock } from '../shared/kernel';
+import { FulfillmentOrder } from '../contexts/fulfillment/domain/fulfillment-order';
+import { allocateQuantity, wholeQuantityToGrams } from '../contexts/fulfillment/domain/quantity-allocation';
+import type { FulfillmentScanPorts, FulfillmentOrderRepository } from '../contexts/fulfillment/application/ports';
+
+/**
+ * 履约单生成任务（T007 F027，D012）：扫描「success 且尚无履约单」的组，按组为事务
+ * 为每笔 paid 订单生成履约单（D011 整数克分配）。
+ * - 幂等：扫描清单（NOT EXISTS）+ order_id 唯一约束（23505 视为已生成）；
+ * - 组级原子：组内任一插入失败整组回滚，下一轮重扫恢复（真实 PG 集成验证）；
+ * - 配置错误（整件数量无法换算整数克）：跳过该组并留痕，不阻塞其他组。
+ */
+export class FulfillmentGenerationTask {
+  constructor(private readonly deps: {
+    scan: FulfillmentScanPorts;
+    fulfillmentOrders: Pick<FulfillmentOrderRepository, 'insert'>;
+    runner: { run<T>(work: (sessionTx: unknown) => Promise<T>): Promise<T> };
+    clock: Clock;
+  }) {}
+
+  async execute(input: { limit?: number }): Promise<number> {
+    const limit = input.limit ?? 20;
+    const groupIds = await this.deps.scan.listSuccessGroupIdsWithoutFulfillment(limit);
+    let generated = 0;
+    for (const groupId of groupIds) {
+      try {
+        const created = await this.generateForGroup(groupId);
+        generated += created > 0 ? 1 : 0;
+      } catch (error) {
+        const code = (error as { code?: string }).code;
+        if (code === '23505') {
+          generated += 1; // 并发重复生成：唯一约束兜底，视为已生成
+          continue;
+        }
+        console.error('[fulfillment-gen] 组生成失败，下一轮重试', groupId, error instanceof Error ? error.message : error);
+      }
+    }
+    return generated;
+  }
+
+  private async generateForGroup(groupId: string): Promise<number> {
+    const snapshot = await this.deps.scan.findGroupSnapshot(groupId);
+    if (!snapshot) {
+      console.error('[fulfillment-gen] 组不存在或无快照，跳过', groupId);
+      return 0;
+    }
+    const totalGrams = wholeQuantityToGrams(snapshot.wholeQuantityText);
+    if (totalGrams === null) {
+      // 商品整件数量无法精确换算整数克：配置错误，跳过并留痕（人工修正配置后重试）
+      console.error('[fulfillment-gen] 整件数量无法换算整数克，跳过组', groupId, snapshot.wholeQuantityText);
+      return 0;
+    }
+    const paidOrders = await this.deps.scan.listPaidByGroup(groupId);
+    if (paidOrders.length === 0) {
+      console.error('[fulfillment-gen] 成功组无 paid 订单，跳过', groupId);
+      return 0;
+    }
+    const allocations = allocateQuantity(totalGrams, paidOrders.map((o) => ({ orderId: o.orderId, units: o.units })));
+    const gramsByOrder = new Map(allocations.map((a) => [a.orderId, a.grams]));
+    const now = this.deps.clock.now();
+    const created = await this.deps.runner.run(async (sessionTx) => {
+      let count = 0;
+      for (const order of paidOrders) {
+        const fulfillment = FulfillmentOrder.create({
+          groupId,
+          orderId: order.orderId,
+          userId: order.userId,
+          allocatedQuantityGrams: gramsByOrder.get(order.orderId) ?? 0,
+          unit: snapshot.unit,
+          receiver: {
+            name: order.address.receiver_name,
+            phone: order.address.phone,
+            province: order.address.province,
+            city: order.address.city,
+            district: order.address.district,
+            detail: order.address.detail
+          },
+          now
+        });
+        await this.deps.fulfillmentOrders.insert(fulfillment, sessionTx);
+        count++;
+      }
+      return count;
+    });
+    return created;
+  }
+}

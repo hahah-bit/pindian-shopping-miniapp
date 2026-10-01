@@ -9,6 +9,8 @@ import { ExpireReservationsTask, FailDeadlineGroupsTask } from '../workflows/ord
 import { PaymentQueryCompensationTask, RefundDriveTask, AnomalyStatsTask } from '../workflows/payment-tasks';
 import { ConfirmPaymentWorkflow } from '../workflows/payment-confirm.workflow';
 import { CreateFullRefundUseCase } from '../contexts/payments/application/refund-flow';
+import { FulfillmentGenerationTask } from '../workflows/fulfillment-generation.task';
+import { PostgresFulfillmentRepository } from '../contexts/fulfillment/adapters/outbound/postgres/fulfillment-repository';
 import { PostgresGroupRepository, PostgresShareReservationRepository } from '../contexts/group-buying/adapters/outbound/postgres/group-repositories';
 import { PostgresOrderRepository } from '../contexts/ordering/adapters/outbound/postgres/order-repository';
 import { PostgresPaymentRepository } from '../contexts/payments/adapters/outbound/postgres/payment-repository';
@@ -53,6 +55,9 @@ async function main(): Promise<void> {
     runner: expiryDeps.runner,
     clock: expiryDeps.clock
   });
+  // T007 履约生成（D012）：success 组 → 每 paid 订单一张履约单（组级事务、幂等重扫）
+  const fulfillmentRepo = new PostgresFulfillmentRepository(pool);
+  const fulfillmentGenTask = new FulfillmentGenerationTask({ scan: fulfillmentRepo, fulfillmentOrders: fulfillmentRepo, runner: expiryDeps.runner, clock: expiryDeps.clock });
   const payQueryTask = new PaymentQueryCompensationTask({ payments, channel: payChannel, confirm, runner: expiryDeps.runner, clock: expiryDeps.clock });
   const refundDriveTask = new RefundDriveTask({ refunds, payments, channel: payChannel, runner: expiryDeps.runner, clock: expiryDeps.clock });
   const anomalyTask = new AnomalyStatsTask({
@@ -65,7 +70,7 @@ async function main(): Promise<void> {
   const stop = () => { stopping = true; };
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);
-  console.log('[worker] 业务任务循环启动：预占过期 / 组截止 / 支付查询补偿 / 退款驱动 / 异常统计');
+  console.log('[worker] 业务任务循环启动：预占过期 / 组截止 / 履约生成 / 支付查询补偿 / 退款驱动 / 异常统计');
   try {
     while (!stopping) {
       const ready = await readiness.execute();
@@ -76,6 +81,8 @@ async function main(): Promise<void> {
         catch (e) { console.error('[worker] 预占过期任务失败', e instanceof Error ? e.message : e); }
         try { const n = await deadlineTask.execute({ limit: 200 }); if (n > 0) console.log(`[worker] 组截止处理 ${n} 组`); }
         catch (e) { console.error('[worker] 组截止任务失败', e instanceof Error ? e.message : e); }
+        try { const n = await fulfillmentGenTask.execute({ limit: 20 }); if (n > 0) console.log(`[worker] 履约单生成 ${n} 组`); }
+        catch (e) { console.error('[worker] 履约生成任务失败', e instanceof Error ? e.message : e); }
         try { const n = await payQueryTask.execute({ limit: 100 }); if (n > 0) console.log(`[worker] 支付查询补偿确认 ${n} 笔`); }
         catch (e) { console.error('[worker] 支付查询补偿失败', e instanceof Error ? e.message : e); }
         try { const n = await refundDriveTask.execute({ limit: 100 }); if (n > 0) console.log(`[worker] 退款驱动处理 ${n} 笔`); }
