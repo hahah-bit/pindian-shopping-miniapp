@@ -16,3 +16,4 @@
 
 - 2026-10-01 复验修订：确认工作流事务化——应用、支付事实与迟到退款同事务，退款建单失败整体回滚可重放；组 success 同事务落 D006 让利台账（group_settlements）；支付结果刷新（POST :id/payment-result）在 processing/unknown 时主动渠道查单。
 - 2026-10-01 第三轮：生产仓储事务贯穿（PaymentRepository.save 会话连接）；库存消耗随外层事务回滚（真实 PG 故障回归）；回调与查询并发 exactly-once（集成）。
+- 2026-10-01 第四轮：确认判定全部移入组锁内（锁内重读订单/支付），已生效事实优先于组状态；并发确认 exactly-once（真实 PG 双实例回归）。

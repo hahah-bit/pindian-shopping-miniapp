@@ -184,6 +184,27 @@ test('退款回调确认：仅渠道证据可标 succeeded；无证据不得显�
   assert.equal(refunds.refunds[0].state.status, 'succeeded');
 });
 
+test('重复退款结果通知幂等：SUCCESS/ABNORMAL 二次投递受理不抛错（第四轮 P1-2）', async () => {
+  const payment = makePayment();
+  const { Refund } = require('../../../backend/dist/contexts/payments/domain/index.js');
+  // SUCCESS 重复：第一次 succeeded，第二次同通知幂等受理
+  const refundA = Refund.create({ refundId: 'aaaaaaaa-0000-4000-8000-00000000bb01', paymentId: payment.state.paymentId, orderId: ORDER, userId: USER, amountFen: 16833, reason: 'user_cancel', now: NOW }).markSubmitted(NOW).markProcessing();
+  const refundsA = new FakeRefundRepository([refundA]);
+  const confirmerA = new RefundResultConfirmer({ refunds: refundsA, runner: new InlineRunner(), clock: { now: () => NOW } });
+  await confirmerA.execute({ outRefundNo: refundA.state.outRefundNo, result: 'SUCCESS', source: 'callback' });
+  const second = await confirmerA.execute({ outRefundNo: refundA.state.outRefundNo, result: 'SUCCESS', source: 'callback' });
+  assert.equal(second, 'succeeded', '重复 SUCCESS 幂等受理');
+  assert.equal(refundsA.refunds[0].state.status, 'succeeded');
+  // ABNORMAL 重复：第一次 failed，第二次幂等受理
+  const refundB = Refund.create({ refundId: 'aaaaaaaa-0000-4000-8000-00000000bb02', paymentId: payment.state.paymentId, orderId: ORDER, userId: USER, amountFen: 16833, reason: 'group_failed', now: NOW }).markSubmitted(NOW).markProcessing();
+  const refundsB = new FakeRefundRepository([refundB]);
+  const confirmerB = new RefundResultConfirmer({ refunds: refundsB, runner: new InlineRunner(), clock: { now: () => NOW } });
+  await confirmerB.execute({ outRefundNo: refundB.state.outRefundNo, result: 'ABNORMAL', source: 'callback' });
+  const secondB = await confirmerB.execute({ outRefundNo: refundB.state.outRefundNo, result: 'ABNORMAL', source: 'callback' });
+  assert.equal(secondB, 'failed', '重复 ABNORMAL 幂等受理');
+  assert.equal(refundsB.refunds[0].state.status, 'failed');
+});
+
 test('累计退款上限：Σ(非失败) ≤ 实付，超出拒绝（G9）', async () => {
   const payment = makePayment();
   const { Refund } = require('../../../backend/dist/contexts/payments/domain/index.js');

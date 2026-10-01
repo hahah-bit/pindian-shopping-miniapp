@@ -64,3 +64,10 @@ spec AC01–AC11 满足（AC11 中真实商户渠道验证如实记录为待用�
 - [x] R12 库存端口事务审查与修复：reserveOne/consumeOne/releaseOne 贯穿 sessionTx；故障注入（组成功落账失败→库存不变；组截止释放失败→库存不变；建组插入失败→预留不变）先红后绿。
 - [x] R13 集成补回调与查询并发 exactly-once（notify 与 payment-result 并发，容量只加一次）。
 - [x] R14 文档回写与提交（verification 第三轮记录）。
+
+## 第四轮修复（2026-10-01 独立审查 85dd357：并发幂等两处 P1）
+
+- [x] R15 并发确认回归（真实 PG，双 confirm 并发）：并发方不得改写 applied→refunded_not_applied、不得建退款（先红）。
+- [x] R16 确认工作流锁内重判：组锁先行 → 锁内重读订单/支付 → 已生效幂等返回；结果语义三分（applied / pending_review / not-applied）；金额核验移入锁内。
+- [x] R17 重复退款结果通知幂等：RefundResultConfirmer 对已达成状态幂等受理（SUCCESS→succeeded、ABNORMAL/CLOSED→failed 不再抛错）；单测先红后绿。
+- [x] R18 复验（专项→全量→Docker）+ 文档回写 + 提交。

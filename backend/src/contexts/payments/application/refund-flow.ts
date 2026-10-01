@@ -176,12 +176,16 @@ export class RefundResultConfirmer {
     const refund = await this.deps.refunds.findByOutRefundNo(outRefundNo);
     if (!refund) throw new ApplicationError('NOT_FOUND', '退款单不存在');
     const now = this.deps.clock.now();
+    // 第四轮（P1-2）：重复结果通知幂等受理——目标状态已达成时返回现状不抛错
+    //（微信对非 200/204 应答会重试，抛错将造成无限重试）。
     if (input.result === 'SUCCESS') {
+      if (refund.state.status === 'succeeded') return 'succeeded';
       const updated = refund.markSucceeded(now, input.channelRefundId);
       await this.deps.refunds.save(updated);
       return 'succeeded';
     }
     if (input.result === 'ABNORMAL' || input.result === 'CLOSED') {
+      if (refund.state.status === 'failed') return 'failed';
       const updated = refund.markFailed(input.result, now);
       await this.deps.refunds.save(updated);
       return 'failed';

@@ -19,11 +19,11 @@ export interface ConfirmPaymentDeps {
     save(reservation: ShareReservation, sessionTx?: unknown): Promise<void>;
   };
   orders: {
-    findById(orderId: string): Promise<Order | null>;
+    findById(orderId: string, sessionTx?: unknown): Promise<Order | null>;
     save(order: Order, sessionTx?: unknown): Promise<void>;
   };
   payments: {
-    findByOrderId(orderId: string): Promise<Payment | null>;
+    findByOrderId(orderId: string, sessionTx?: unknown): Promise<Payment | null>;
     insert(payment: Payment, sessionTx?: unknown): Promise<void>;
     save(payment: Payment, sessionTx?: unknown): Promise<void>;
   };
@@ -61,36 +61,47 @@ export class ConfirmPaymentWorkflow {
       console.error('[payment-confirm] 本地无支付单，等待事实入账', fact.outTradeNo);
       return false;
     }
-    if (payment.state.status === 'succeeded') return true; // 重复通知幂等
-
-    // 金额核验（G10）
-    if (fact.payerTotal !== order.state.totalAmountFen) {
-      await this.deps.payments.save(payment.markSucceeded({ channelTransactionId: fact.channelTransactionId, source: input.source, payload: fact.payload, now }).markAppliedResult('pending_review'));
-      return false;
-    }
+    if (payment.state.status === 'succeeded') return true; // 锁外快速幂等
 
     const succeeded = payment.markSucceeded({ channelTransactionId: fact.channelTransactionId, source: input.source, payload: fact.payload, now });
 
     // A03（复验）：应用、支付事实、迟到退款在**同一事务**——退款建单失败整体回滚，
     // 支付单停留原态可由重放恢复；提交后重放被 succeeded 早退挡住，不会重复退款。
+    // 第四轮（P1-1）：组锁先行，锁内基于重读事实判定——回调与查单并发时，后到者在
+    // 锁内看到"已生效"即幂等返回，绝不走"不适用→退款"路径（判定在锁外会错误退款）。
     const outcome = await this.deps.runner.run(async (sessionTx) => {
-      const lockedOrder = await this.deps.orders.findById(fact.outTradeNo);
-      if (!lockedOrder) return { applied: false, reason: 'missing' as const };
-      if (lockedOrder.state.status !== 'unpaid') return { applied: false, reason: 'order_not_unpaid' as const };
-      const lockedGroup = await this.deps.groups.findByIdForUpdate(lockedOrder.state.groupId, sessionTx);
-      if (!lockedGroup || !lockedGroup.isOpen || lockedGroup.state.deadline <= now) return { applied: false, reason: 'group_closed' as const };
-      const reservation = await this.deps.reservations.findByOrderId(lockedOrder.state.orderId, sessionTx);
-      if (!reservation || reservation.state.status !== 'reserved') return { applied: false, reason: 'no_reservation' as const };
+      const lockedGroup = await this.deps.groups.findByIdForUpdate(order.state.groupId, sessionTx);
+      // 锁内重读订单：并发方提交后此处可见。已生效事实（paid）优先于组状态判定——
+      // 组满成功后 isOpen 已为 false，此时后到者必须幂等返回而非走"组关闭→退款"。
+      const freshOrder = await this.deps.orders.findById(fact.outTradeNo, sessionTx);
+      if (!freshOrder) return { applied: false, refund: true, reason: 'missing' as const };
+      if (freshOrder.state.status === 'paid') return { applied: true, reason: 'already' as const };
+      if (freshOrder.state.status !== 'unpaid') return { applied: false, refund: true, reason: 'order_not_unpaid' as const };
+      // 锁内重读支付事实
+      const freshPayment = await this.deps.payments.findByOrderId(fact.outTradeNo, sessionTx);
+      if (freshPayment && freshPayment.state.status === 'succeeded') {
+        if (freshPayment.state.appliedResult === 'applied') return { applied: true, reason: 'already' as const };
+        return { applied: false, refund: false, reason: 'pending_review' as const }; // 已人工复核：不覆盖不退款
+      }
+      // 金额核验（G10，锁内）
+      if (fact.payerTotal !== freshOrder.state.totalAmountFen) {
+        await this.deps.payments.save(succeeded.markAppliedResult('pending_review'), sessionTx);
+        return { applied: false, refund: false, reason: 'amount_mismatch' as const };
+      }
+      // 组开放性只约束"准备生效"的支付（真正不可生效才转退款）
+      if (!lockedGroup || !lockedGroup.isOpen || lockedGroup.state.deadline <= now) return { applied: false, refund: true, reason: 'group_closed' as const };
+      const reservation = await this.deps.reservations.findByOrderId(freshOrder.state.orderId, sessionTx);
+      if (!reservation || reservation.state.status !== 'reserved') return { applied: false, refund: true, reason: 'no_reservation' as const };
       // 预占过期检查（任务未跑时兜底，D008）
-      if (!reservation.isActive(now)) return { applied: false, reason: 'reservation_expired' as const };
+      if (!reservation.isActive(now)) return { applied: false, refund: true, reason: 'reservation_expired' as const };
       // 转换语义：预占已持有容量，生效只是 reserved→paid，不新占容量（capacity 检查由 withPaidUnits 的 reserved<0 防护）
 
       // 生效：预占 converted + 组 paid/amount += + 订单 paid
       const converted = reservation.convert(now);
       const paidGroup = lockedGroup.withPaidUnits(converted.state.units, now)
-        .withPaidAmount(lockedOrder.state.totalAmountFen, lockedOrder.state.goodsAmountFen, now);
+        .withPaidAmount(freshOrder.state.totalAmountFen, freshOrder.state.goodsAmountFen, now);
       const finalGroup = paidGroup.state.paidUnits === 60 ? paidGroup.markSuccess(now) : paidGroup;
-      const paidOrder = lockedOrder.markPaid(now);
+      const paidOrder = freshOrder.markPaid(now);
       await this.deps.reservations.save(converted, sessionTx);
       await this.deps.groups.save(finalGroup, sessionTx);
       await this.deps.orders.save(paidOrder, sessionTx);
@@ -109,7 +120,8 @@ export class ConfirmPaymentWorkflow {
       return { applied: true, reason: 'ok' as const };
     });
 
-    if (outcome.applied) return outcome.applied;
+    if (outcome.applied) return true;
+    if (!outcome.refund) return false; // pending_review / amount_mismatch：已复核，不覆盖不退款
 
     // D008：迟到/不可生效支付 → 支付事实与全额退款（late_payment）同事务；退款失败整体回滚可重放
     await this.deps.runner.run(async (sessionTx) => {

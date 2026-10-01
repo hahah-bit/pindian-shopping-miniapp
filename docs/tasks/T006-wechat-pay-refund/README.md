@@ -7,7 +7,7 @@
 - 授权：用户已授权 T006 全部范围（设计/实现/自测/修复/本地提交）。
 - 修改范围：`backend/src/contexts/payments`、`ordering`、`group-buying`、`workflows`、`bootstrap`、`worker`、`migrations/0011..0014`、`contracts`、`apps/mini-program`（支付/退款页）、`apps/admin-web`（支付退款查询）、`tests`、文档。
 - 前置功能：T002/T003/T004（均已完成自测，74438ab）。
-- 当前状态：已完成（2026-10-01 第三轮：第二轮复验暴露的生产事务贯穿缺陷已修复——PaymentRepository/StockReservationPort 贯穿 sessionTx，真实 PG 故障回归先红后绿收口；专项 51/51、全量 170/170、Docker 冒烟通过；真实商户渠道/真机待用户环境——见 verification.md 第三轮记录）。
+- 当前状态：已完成（2026-10-01 四轮：A01–A05 → 生产事务贯穿 → 并发幂等 P1×2；真实 PG 故障/并发回归收口，专项 53/53、全量 172/172、Docker 冒烟通过；真实商户渠道/真机待用户环境——见 verification.md 第四轮记录）。详情见 [独立验收](independent-acceptance.md) 最新审查；本次未进入全量验收）。
 - 阻塞项：**真实商户配置缺失**（WX_APPID 留空、无 mchid/商户私钥/APIv3 密钥/证书序列号）→ 真实渠道调用不可执行；实现为可配置端口 + 缺配置明确报错，不伪造渠道成功。
 
 文档：[DDD](ddd.md)、[spec](spec.md)、[plan](plan.md)、[实际验收](verification.md)、[决策记录](decisions/)（D006–D010 已确认）。

@@ -1,6 +1,6 @@
 # T006 实际验收记录
 
-> 2026-10-01 独立验收历程：第一轮未通过（A01–A05）→ 第二轮修复后独立复验仍未通过（生产事务缺陷，基线 8c86e9d）→ 第三轮修复（本记录），以**生产仓储 + 真实 BEGIN/ROLLBACK** 故障回归收口。历次结论与证据见 [independent-acceptance.md](independent-acceptance.md)；独立复验由验收方执行，本记录为开发自测。
+> 2026-10-01 独立验收历程：第一轮未通过（A01–A05）→ 第二轮修复后独立复验仍未通过（生产事务缺陷，基线 8c86e9d）→ 第三轮修复（生产事务贯穿）→ 第三轮独立审查再发现两处并发幂等 P1（基线 85dd357）→ 第四轮修复（本记录）。历次结论与证据见 [independent-acceptance.md](independent-acceptance.md)；独立复验由验收方执行，本记录为开发自测。
 
 日期：2026-10-01（Asia/Shanghai）。第二轮：针对独立验收 A01–A05 及附加验证项（事务边界/退款回调/刷新语义）逐项修复。结论：**修复完成、自测通过；真实商户渠道与真机仍待用户环境，不标记渠道已验证**。
 
@@ -48,6 +48,32 @@
 | 全量 `npm test` | **170/170，0 失败 0 跳过**（T001–T004 回归实跑） |
 | Docker 冒烟 | 4 容器 healthy；主库 0001–0015；Worker 五任务运行；无签名回调 400；API ready 200 |
 | 未验证项 | 真实商户渠道、微信开发者工具/真机（无配置/无环境）；平台证书多序列号轮换 |
+
+## 第四轮修复（2026-10-01 独立审查 85dd357：并发幂等两处 P1）
+
+独立审查以并发探针复现两处 P1（专项 50/51 失败）。本轮先红后绿修复：
+
+### P1-1 并发支付确认错误退款
+
+- **复现**：回调与查单并发确认同一支付，败者把 `applied` 改写为 `refunded_not_applied` 并创建 16833 分全额退款。根因：支付幂等判断在组锁外，拿锁后未基于锁内事实重判；且组满成功后 `isOpen=false` 的 `group_closed` 分支优先于"已生效"判定，使败者落入退款路径。
+- **修复（R16）**：确认事务改为**组锁先行、锁内重判**——锁内重读订单（paid → 幂等成功）与支付事实（succeeded+applied → 幂等成功；pending_review → 不覆盖不退款），金额核验移入锁内；**已生效事实判定优先于组开放性判定**，组状态只约束"准备生效"的支付。结果语义三分：applied（本次或并发方已生效）/ pending_review·amount_mismatch（不覆盖不退款）/ not-applied（才允许事实改写+全额退款）。
+- **回归**（confirm-tx.test.mjs，真实 PG + 生产工作流双实例 Promise.all）：修复前 `[false,true]` + `refunded_not_applied`（红）→ 修复后 `[true,true]`、payment applied、无退款单、paid_units 40+20=60、预占转换一次、消耗/让利台账各恰一条（连续 3 轮稳定）。orders.findById / payments.findByOrderId 事务内读随 sessionTx 贯穿（锁内重读依赖）。
+
+### P1-2 重复退款成功通知不幂等
+
+- **复现**：相同 `REFUND.SUCCESS` 第二次处理抛 `REFUND_NOT_ALLOWED`（markSucceeded 要求 submitted/processing），回调端 500 → 微信无限重试。
+- **修复（R17）**：`RefundResultConfirmer` 对已达成状态幂等受理——SUCCESS 且已 succeeded → 返回 'succeeded'；ABNORMAL/CLOSED 且已 failed → 返回 'failed'；不抛错、不变更。
+- **回归**（refund-flow.test.mjs，先红）：SUCCESS 二次投递、ABNORMAL 二次投递均幂等受理（修复前红）。
+
+### 本轮结果
+
+| 验证 | 结果 |
+| --- | --- |
+| 专项 `npm run test:task:t006` | **53/53，0 跳过**（新增并发确认真实 PG 回归 + 重复通知幂等单测） |
+| 全量 `npm test` | **172/172，0 失败 0 跳过** |
+| 并发回归稳定性 | 连续 3 轮通过 |
+| Docker 冒烟 | 4 容器 healthy；Worker 五任务；无签名回调 400；API ready 200 |
+| 未验证项 | 真实商户渠道、微信开发者工具/真机（无配置/无环境） |
 
 ## 官方文档核验（2026-10-01）
 

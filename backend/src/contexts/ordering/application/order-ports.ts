@@ -2,7 +2,7 @@ import type { Order } from '../domain/order';
 
 export interface OrderRepository {
   findByIdempotencyKey(userId: string, key: string): Promise<Order | null>;
-  findById(orderId: string): Promise<Order | null>;
+  findById(orderId: string, sessionTx?: unknown): Promise<Order | null>;
   insert(order: Order, sessionTx?: unknown): Promise<void>;
   save(order: Order, sessionTx?: unknown): Promise<void>;
   /** 到期/取消条件迁移：仅 unpaid 生效，返回是否迁移（幂等由调用方保证）。 */

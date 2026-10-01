@@ -88,8 +88,8 @@ export class PostgresOrderRepository implements OrderRepository {
     });
   }
 
-  async findById(orderId: string): Promise<Order | null> {
-    return this.query(async (client) => {
+  async findById(orderId: string, sessionTx?: unknown): Promise<Order | null> {
+    return withExecutor((sessionTx as PgExecutor) ?? this.pool, async (client) => {
       const { rows } = await client.query<OrderRow>(`SELECT ${COLUMNS} FROM orders WHERE id = $1`, [orderId]);
       return rows[0] ? orderOf(rows[0]) : null;
     });

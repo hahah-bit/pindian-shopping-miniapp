@@ -1,5 +1,7 @@
 # T006 独立验收（2026-10-01）
 
+> 最新审查基线 `85dd357`：仍未通过。真实支付/库存回滚缺陷已修复，但本轮专项实际 50/51，并发支付确认误建退款在整套专项与独立集成重跑中均失败；重复退款成功回调不幂等。详见文末“第三轮独立审查”，之前记录保留追溯。
+
 > 最新独立复验：对 `8c86e9d` 的结论仍为未通过。专项 49/49、全量 168/168、Docker 冒烟通过，但真实 PostgreSQL 故障注入证明 A03 的生产事务边界尚未修好。以下原验收记录保留用于追溯，最新结果见文末“第二轮独立复验”。
 
 ## 结论与范围
@@ -119,3 +121,61 @@ T006 尚未通过，因此下一轮提示词应指向 T006 缺陷修复与复验
 **结论：修复确实有进展，49/168 项测试结果真实，但独立验收仍未通过。** 下一步贯穿 PaymentRepository 的事务参数（尤其 save 与必要读取），补充本探针对应的真实 PG 回归，并审查库存消耗是否同样脱离外层事务；后者本轮仅源码发现风险，未做故障复现。真实商户/真机及完整前端行为验收仍未完成。
 
 本轮只回写独立验收和 README 状态，没有修改业务代码，没有新增 Git 提交；zcode 已有提交保留，协调目录与 T005/F019 未处理。
+
+## 2026-10-01 第三轮独立审查（基线 85dd357）
+
+用户要求审查 zcode 新交付。最新提交 `85dd357` 已实际修正 PaymentRepository 与 StockReservationPort 的事务参数，并新增 `confirm-tx.test.mjs` 真实 PG 故障回归。审查没有修改业务代码。
+
+### 实际验证
+
+| 操作 | 结果 |
+| --- | --- |
+| `npm run test:task:t006` | **50 通过 / 1 失败 / 0 跳过，退出码 1**；类型检查、构建、架构检查通过 |
+| 新增支付/库存事务回归 | 两项真实 PG 故障回归均通过：退款建单失败回滚后重放，组成功落账失败时库存消耗回滚 |
+| `node --test tests/task-suites/t006/integration-db-http.test.mjs` | 单独重跑同一集成仍失败，0 通过 / 1 失败，退出码 1 |
+| `npm run smoke:docker`、`docker compose ps` | 冒烟通过，四容器 healthy；不代表并发资金流程通过 |
+| 独立 PG 查询 | 只查询 `/pindian_t006_test`，确认下述已支付订单与错误退款事实，没有写主业务库 |
+| 生产 Refund / RefundResultConfirmer 双次通知探针 | 第二次相同 SUCCESS 事实抛 REFUND_NOT_ALLOWED；使用内存仓储替身，未调用真实微信 |
+| 项目全量 / 浏览器 / 微信真机 | **本轮未执行**；专项失败，未进入“专项通过后全量”的验收阶段；不能沿用开发自测 170/170 作为本轮结果 |
+
+### [P1] 并发支付确认将有效支付误判为迟到支付并创建全额退款
+
+位置：`backend/src/workflows/payment-confirm.workflow.ts`，初始支付状态读取/早退（57–64 行）、加组锁前订单读取（77–80 行）、预占检查（82–83 行）以及后续退款分支（115 行起）。
+
+现有集成在回调与查单 `Promise.all` 后，于 `tests/task-suites/t006/integration-db-http.test.mjs:326` 失败：期望 applied，实际 refunded_not_applied。整套专项和单独重跑两次均失败。
+
+真实测试库查询结果：
+
+```json
+{
+  "order_status": "paid",
+  "payment_status": "succeeded",
+  "applied_result": "refunded_not_applied",
+  "paid_units": 20,
+  "refund_reason": "late_payment",
+  "refund_status": "requested",
+  "refund_amount": 16833
+}
+```
+
+影响：用户支付已经生效、订单仍 paid、组内保留 20 支付单位，却存在一笔 16833 分待驱动的全额退款；不是仅展示状态错误。
+
+根因：两次确认可同时读取 processing，早退检查在事务外。第二次确认等待组锁时，第一次已将预占转换；第二次拿锁后看到 converted 预占或已变更订单，走“不可生效→迟到退款”，没有在锁保护内重读支付已应用事实、作幂等返回。旧 Payment 快照被写成 refunded_not_applied。组锁保证容量更新串行，但没有保证支付确认的幂等判定与资金动作串行。
+
+修复应明确统一锁顺序，在事务及锁保护内读取并判断支付/订单/预占的最新事实；同一已生效支付重放只能幂等返回，不得走迟到退款或覆盖 applied。回归应通过同步屏障固定两次确认同时读取旧状态、一次等待锁的时序，覆盖回调×回调、回调×查单、查单×查单；保留原真实 PG/HTTP 断言，不能通过移除并发或放宽断言规避。
+
+### [P1] 相同退款 SUCCESS 通知重复处理报错
+
+位置：`backend/src/contexts/payments/application/refund-flow.ts:180`、`backend/src/contexts/payments/domain/refund.ts:78`。
+
+探针使用生产 Refund 从 submitted→processing 开始，连续两次调用生产 RefundResultConfirmer，传入相同 outRefundNo、SUCCESS 和 channelRefundId。第一次返回 succeeded；第二次抛出：
+
+```json
+{"code":"REFUND_NOT_ALLOWED","message":"退款单当前状态不可标记成功"}
+```
+
+原因：`markSucceeded` 只允许 processing/submitted，没有对 succeeded 的同事实幂等返回；支付退款 HTTP 回调入口直接调用 confirmer，该错误映射为 409，渠道不能获得成功受理应答。与查询并发或通知重投都可能遇到已成功状态。需要验证相同事实幂等受理、重复不写账，并拒绝互相冲突的渠道事实；结果确认应具备并发保护，不能用旧查询快照覆盖终态。
+
+### 本轮结论及下一步
+
+**独立审查未通过。** 已确认上轮事务贯穿修复有效，但新并发资金错误及退款回调幂等问题需修复并补回归。专项失败，因此本轮不重新运行全量、不做完成性 Git 提交；zcode 已有 `85dd357` 提交保留。README 回写为验证中，开发自测报告作为历史记录保留，不能表示本轮验收通过。
