@@ -9,6 +9,7 @@ function formatTime(iso: string): string {
 const PAGE_SIZE = 20;
 
 Page({
+  readingIds: null as Set<string> | null,
   data: {
     isMock: apiConfig.mode === 'mock',
     loading: false,
@@ -73,18 +74,25 @@ Page({
     const notice = this.data.items[index];
     if (!notice) return;
     if (notice.readAt) return;
+    if (!this.readingIds) this.readingIds = new Set<string>();
+    if (this.readingIds.has(notice.id)) return;
+    this.readingIds.add(notice.id);
     try {
       const result = await markNotificationRead(notice.id);
-      const items = [...this.data.items];
-      items[index] = { ...notice, readAt: result.notification.readAt };
+      const wasUnread = this.data.items.some((item) => item.id === notice.id && !item.readAt);
+      const items = this.data.items.map((item) => item.id === notice.id ? { ...item, readAt: result.notification.readAt } : item);
       this.setData({
         items,
-        unreadCount: Math.max(0, this.data.unreadCount - 1)
+        unreadCount: Math.max(0, this.data.unreadCount - (wasUnread ? 1 : 0))
       });
     } catch (cause) {
-      if (!(cause instanceof UserAuthExpiredError)) {
+      if (cause instanceof UserAuthExpiredError) {
+        this.setData({ needLogin: true, error: '请先登录后查看消息' });
+      } else {
         this.setData({ error: cause instanceof Error ? cause.message : '标记已读失败' });
       }
+    } finally {
+      this.readingIds.delete(notice.id);
     }
   },
 

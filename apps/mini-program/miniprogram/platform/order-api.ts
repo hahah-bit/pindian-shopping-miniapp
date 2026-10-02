@@ -1,5 +1,5 @@
 import type { MiniOrderView, MiniPayParams, PayInitiation, MiniRefundView } from '@pindian/contracts';
-import { storedUserToken, UserAuthExpiredError, ApiError } from './user-auth';
+import { storedUserToken, storeUserToken, UserAuthExpiredError, ApiError } from './user-auth';
 export { UserAuthExpiredError, ApiError };
 import { apiConfig } from './config';
 
@@ -14,7 +14,7 @@ function request<T>(options: { path: string; method: 'GET' | 'POST'; body?: Reco
   return new Promise((resolve, reject) => {
     const token = storedUserToken();
     const header: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (options.authed) {
+    if (options.authed !== false) {
       if (!token) {
         reject(new UserAuthExpiredError());
         return;
@@ -33,6 +33,7 @@ function request<T>(options: { path: string; method: 'GET' | 'POST'; body?: Reco
           return;
         }
         if (response.statusCode === 401) {
+          storeUserToken(null);
           reject(new UserAuthExpiredError());
           return;
         }
