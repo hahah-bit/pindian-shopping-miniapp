@@ -17,7 +17,7 @@ export interface RecordOperationInput {
 export class RecordOperation {
   constructor(private readonly deps: { repository: OperationLogRepository; clock: Clock }) {}
 
-  async execute(input: RecordOperationInput): Promise<void> {
+  async execute(input: RecordOperationInput, sessionTx?: unknown): Promise<void> {
     try {
       const log = new OperationLog({
         adminId: input.adminId,
@@ -28,7 +28,7 @@ export class RecordOperation {
         requestId: input.requestId ?? null,
         createdAt: this.deps.clock.now()
       });
-      await this.deps.repository.insert(log);
+      await this.deps.repository.insert(log, sessionTx);
     } catch (error) {
       console.error('[audit] 操作日志写入失败', error instanceof Error ? error.message : error);
     }

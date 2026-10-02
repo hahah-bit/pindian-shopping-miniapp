@@ -1350,6 +1350,458 @@ paths:
       responses:
         '200': { description: 已受理（幂等；重复通知返回同样成功；未知事件类型同样受理） }
         '400': { $ref: '#/components/responses/Error400' }
+  /api/mini/v1/conversations:
+    post:
+      operationId: createMiniConversation
+      security: [{ bearerAuth: [] }]
+      summary: 发起/恢复会话（已有未结束会话幂等返回；无客服在线=留言语义）
+      responses:
+        '200':
+          description: 会话视图
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      conversation:
+                        type: object
+                        properties:
+                          id: { type: string, format: uuid }
+                          status: { type: string, enum: [queued, active, ended, converted] }
+                          hasAgent: { type: boolean }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/mini/v1/conversations/current:
+    get:
+      operationId: getCurrentMiniConversation
+      security: [{ bearerAuth: [] }]
+      summary: 本人未结束会话（无则 conversation=null 空态）
+      responses:
+        '200':
+          description: 会话或空态
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      conversation: { type: [object, 'null'] }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/mini/v1/conversations/{id}/messages:
+    get:
+      operationId: listMiniConversationMessages
+      security: [{ bearerAuth: [] }]
+      summary: 增量拉取消息（afterSeq 断线补取；≤100 条/页；内部备注不含；他人 404）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: afterSeq, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200':
+          description: 增量消息
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    required: [messages, lastSeq]
+                    properties:
+                      messages:
+                        type: array
+                        items:
+                          type: object
+                          required: [seq, sender, kind, content, createdAt]
+                          properties:
+                            seq: { type: integer }
+                            sender: { type: string, enum: [user, agent, system] }
+                            kind: { type: string, enum: [text, image, card] }
+                            content: { type: object }
+                            createdAt: { type: string, format: date-time }
+                      lastSeq: { type: integer }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+    post:
+      operationId: sendMiniConversationMessage
+      security: [{ bearerAuth: [] }]
+      summary: 发送消息（clientMessageId 幂等；ended/converted 409）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientMessageId, kind, content]
+              properties:
+                clientMessageId: { type: string, maxLength: 64 }
+                kind: { type: string, enum: [text, image, card] }
+                content:
+                  type: object
+                  properties:
+                    text: { type: string, maxLength: 2000 }
+                    mediaAssetId: { type: string, format: uuid }
+                    cardKind: { type: string, enum: [product, order, group, refund] }
+                    cardRefId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: 幂等返回原消息（duplicated=true）
+        '201':
+          description: 已发送（seq 单调）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      message:
+                        type: object
+                        required: [seq, sender, kind, content, createdAt]
+                        properties:
+                          seq: { type: integer }
+                          sender: { type: string }
+                          kind: { type: string }
+                          content: { type: object }
+                          createdAt: { type: string, format: date-time }
+                      duplicated: { type: boolean }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/mini/v1/conversations/{id}/end:
+    post:
+      operationId: endMiniConversation
+      security: [{ bearerAuth: [] }]
+      summary: 用户结束会话（幂等）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 已结束 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/cards/{kind}/{id}:
+    get:
+      operationId: getMiniCard
+      security: [{ bearerAuth: [] }]
+      summary: 卡片只读投影（product 需上架；order/group/refund 仅本人）
+      parameters:
+        - { name: kind, in: path, required: true, schema: { type: string, enum: [product, order, group, refund] } }
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 卡片摘要（按 kind 结构不同）
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/tickets:
+    post:
+      operationId: createMiniTicket
+      security: [{ bearerAuth: [] }]
+      summary: 用户提交售后工单
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, title, description]
+              properties:
+                type: { type: string, enum: [group_issue, payment_issue, refund_issue, product_issue, shipment_issue, complaint, other] }
+                title: { type: string, maxLength: 60 }
+                description: { type: string, maxLength: 2000 }
+                orderId: { type: string, format: uuid }
+      responses:
+        '201': { description: 已创建（open） }
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+    get:
+      operationId: listMiniTickets
+      security: [{ bearerAuth: [] }]
+      summary: 本人工单列表
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200': { description: 分页工单（仅本人） }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/mini/v1/tickets/{id}:
+    get:
+      operationId: getMiniTicket
+      security: [{ bearerAuth: [] }]
+      summary: 本人工单详情（他人 404）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 工单详情 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/tickets/{id}/feedback:
+    post:
+      operationId: feedbackMiniTicket
+      security: [{ bearerAuth: [] }]
+      summary: 用户反馈（确认解决/继续追问；本人）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [satisfied]
+              properties:
+                satisfied: { type: boolean }
+                text: { type: string, maxLength: 1000 }
+      responses:
+        '200': { description: 已记录（幂等） }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/cs/queue:
+    get:
+      operationId: listCsQueue
+      security: [{ bearerAuth: [] }]
+      summary: 排队中会话（agent:manage）
+      responses:
+        '200': { description: 排队列表 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/cs/heartbeat:
+    post:
+      operationId: csHeartbeat
+      security: [{ bearerAuth: [] }]
+      summary: 客服在线心跳（agent:manage）
+      responses:
+        '200': { description: ok }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/cs/conversations:
+    get:
+      operationId: listCsConversations
+      security: [{ bearerAuth: [] }]
+      summary: 我的会话分页（agent:manage）
+      parameters: [{ name: status, in: query, schema: { type: string, enum: [queued, active, ended, converted] } }]
+      responses:
+        '200': { description: 会话列表 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/cs/conversations/{id}/accept:
+    post:
+      operationId: acceptCsConversation
+      security: [{ bearerAuth: [] }]
+      summary: 接入（queued→active；并发恰一人成功，其余 409）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 已接入 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/admin/v1/cs/conversations/{id}/messages:
+    get:
+      operationId: listCsConversationMessages
+      security: [{ bearerAuth: [] }]
+      summary: 增量拉取（含内部备注；仅分配给自己的会话）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: afterSeq, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        '200': { description: 增量消息 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+    post:
+      operationId: sendCsConversationMessage
+      security: [{ bearerAuth: [] }]
+      summary: 客服回复 / 内部备注（internal=true）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientMessageId, kind, content]
+              properties:
+                clientMessageId: { type: string, maxLength: 64 }
+                kind: { type: string, enum: [text, image, card, note] }
+                content: { type: object }
+                internal: { type: boolean, default: false }
+      responses:
+        '200': { description: 幂等 }
+        '201': { description: 已发送 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/cs/conversations/{id}/transfer:
+    post:
+      operationId: transferCsConversation
+      security: [{ bearerAuth: [] }]
+      summary: 转接其他客服（审计 cs.transfer）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetAgentId]
+              properties:
+                targetAgentId: { type: string, format: uuid }
+      responses:
+        '200': { description: 已转接 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/cs/conversations/{id}/end:
+    post:
+      operationId: endCsConversation
+      security: [{ bearerAuth: [] }]
+      summary: 客服结束会话
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 已结束 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/cs/conversations/{id}/convert-ticket:
+    post:
+      operationId: convertCsConversationToTicket
+      security: [{ bearerAuth: [] }]
+      summary: 会话转售后工单（open 工单 + 会话 converted）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, title, description]
+              properties:
+                type: { type: string, enum: [group_issue, payment_issue, refund_issue, product_issue, shipment_issue, complaint, other] }
+                title: { type: string, maxLength: 60 }
+                description: { type: string, maxLength: 2000 }
+      responses:
+        '201': { description: 已创建工单 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/after-sales/tickets:
+    get:
+      operationId: listAdminTickets
+      security: [{ bearerAuth: [] }]
+      summary: 工单分页（agent:manage）
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, processing, resolved, closed] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200': { description: 分页工单 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+  /api/admin/v1/after-sales/tickets/{id}:
+    get:
+      operationId: getAdminTicket
+      security: [{ bearerAuth: [] }]
+      summary: 工单详情 + actions（agent:manage）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 工单详情 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/after-sales/tickets/{id}/accept:
+    post:
+      operationId: acceptAdminTicket
+      security: [{ bearerAuth: [] }]
+      summary: 受理（open→processing；审计）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses:
+        '200': { description: 已受理 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/admin/v1/after-sales/tickets/{id}/reply:
+    post:
+      operationId: replyAdminTicket
+      security: [{ bearerAuth: [] }]
+      summary: 处理回复（记录 action）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 2000 }
+      responses:
+        '200': { description: 已回复 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/admin/v1/after-sales/tickets/{id}/refund:
+    post:
+      operationId: refundAdminTicket
+      security: [{ bearerAuth: [] }]
+      summary: 发起全额退款（processing 才可；经支付域公开用例校验资格与额度；失败 409 且无 action；审计）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId: { type: string, format: uuid }
+      responses:
+        '200': { description: 退款已创建 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '404': { $ref: '#/components/responses/Error404' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/admin/v1/after-sales/tickets/{id}/resolve:
+    post:
+      operationId: resolveAdminTicket
+      security: [{ bearerAuth: [] }]
+      summary: 标记解决（processing→resolved；审计）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reply: { type: string, maxLength: 2000 }
+      responses:
+        '200': { description: 已解决 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
+        '409': { $ref: '#/components/responses/Error409' }
+  /api/admin/v1/after-sales/tickets/{id}/close:
+    post:
+      operationId: closeAdminTicket
+      security: [{ bearerAuth: [] }]
+      summary: 关闭工单（幂等；审计）
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 200 }
+      responses:
+        '200': { description: 已关闭 }
+        '401': { $ref: '#/components/responses/Error401' }
+        '403': { $ref: '#/components/responses/Error403' }
 components:
   securitySchemes:
     bearerAuth:

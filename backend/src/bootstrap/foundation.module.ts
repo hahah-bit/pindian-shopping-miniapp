@@ -112,6 +112,15 @@ import { PostgresFulfillmentRepository } from '../contexts/fulfillment/adapters/
 import { TransactionalFulfillmentAudit } from '../contexts/fulfillment/adapters/outbound/postgres/fulfillment-audit';
 import { AdminFulfillmentController } from '../contexts/fulfillment/adapters/inbound/admin/fulfillment.controller';
 import { MiniFulfillmentController } from '../contexts/fulfillment/adapters/inbound/mini/mini-fulfillment.controller';
+import { PostgresConversationRepository } from '../contexts/customer-service/adapters/outbound/postgres/conversation-repository';
+import { PostgresTicketRepository } from '../contexts/after-sales/adapters/outbound/postgres/ticket-repository';
+import { CreateConversationUseCase, AppendMessageUseCase, ListMessagesUseCase } from '../contexts/customer-service/application/conversation-usecases';
+import { AcceptConversationUseCase, TransferConversationUseCase, EndConversationUseCase } from '../contexts/customer-service/application/agent-usecases';
+import { CreateTicketUseCase, ProcessTicketUseCase } from '../contexts/after-sales/application/ticket-usecases';
+import { RequestTicketRefundUseCase, ConvertConversationToTicketUseCase } from '../contexts/after-sales/application/ticket-coordination';
+import { MiniCsController, AdminCsController } from '../contexts/customer-service/adapters/inbound/cs-controllers';
+import { MiniCardController } from '../contexts/customer-service/adapters/inbound/mini-card.controller';
+import { ApplicationError } from '../shared/kernel';
 import { AdminPayRefundQueries } from '../contexts/payments/application/admin-pay-refund-queries';
 import { contexts } from './context-registry';
 import { readConfig } from './config';
@@ -140,6 +149,9 @@ import { TOKENS } from './injection-tokens';
     AdminPayRefundController,
     AdminFulfillmentController,
     MiniFulfillmentController,
+    MiniCsController,
+    AdminCsController,
+    MiniCardController,
   ],
   providers: [
     { provide: TOKENS.PgPool, useFactory: () => new Pool({ connectionString: readConfig().databaseUrl, max: 10 }) },
@@ -331,6 +343,45 @@ import { TOKENS } from './injection-tokens';
     { provide: 'ADMIN_FULFILLMENT_QUERIES', useFactory: (pool: Pool, users) => new AdminFulfillmentQueries(pool, (userId: string) => users.findById(userId).then((u: { state: { nickname: string } } | null) => u?.state.nickname ?? '（已注销）')), inject: [TOKENS.PgPool, 'USER_REPOSITORY'] },
     { provide: MiniFulfillmentQueries, useFactory: (orders, repo: PostgresFulfillmentRepository) => new MiniFulfillmentQueries({ orders, fulfillmentOrders: repo, shipments: repo, groups: repo }), inject: ['ORDER_REPOSITORY', 'FULFILLMENT_ORDER_REPOSITORY'] },
     { provide: ConfirmReceiptUseCase, useFactory: (repo, pool: Pool, clock) => new ConfirmReceiptUseCase({ fulfillmentOrders: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['FULFILLMENT_ORDER_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    // T008 客服与售后工单（F031-F034）
+    { provide: 'CS_CONVERSATION_REPOSITORY', useFactory: (pool: Pool) => new PostgresConversationRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'AFTER_SALES_TICKET_REPOSITORY', useFactory: (pool: Pool) => new PostgresTicketRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'CS_REFUND_PORT', useFactory: (orders, groups, payments, refunds, pool: Pool, clock) => {
+        const creator = new CreateFullRefundUseCase({ refunds, payments, clock });
+        return {
+          async checkRefundable(input: { orderId: string }) {
+            const payment = await payments.findByOrderId(input.orderId).catch(() => null);
+            if (!payment) return { refundable: false, reason: '订单无支付事实' };
+            if (payment.state.status !== 'succeeded') return { refundable: false, reason: '订单支付未完成' };
+            return { refundable: true };
+          },
+          async createFullRefund(input: { orderId: string; reason: string }) {
+            const payment = await payments.findByOrderId(input.orderId);
+            if (!payment) throw new ApplicationError('REFUND_NOT_ALLOWED', '订单无支付事实');
+            return creator.execute({ paymentId: payment.state.paymentId, orderId: input.orderId, userId: payment.state.userId, reason: 'group_failed' as const });
+          }
+        };
+      }, inject: ['ORDER_REPOSITORY', 'GROUP_REPOSITORY', 'PAYMENT_REPOSITORY', 'REFUND_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: CreateConversationUseCase, useFactory: (repo, pool: Pool, clock) => new CreateConversationUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: AppendMessageUseCase, useFactory: (repo, pool: Pool, clock) => new AppendMessageUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: ListMessagesUseCase, useFactory: (repo) => new ListMessagesUseCase({ conversations: repo, listMessages: (id: string, afterSeq: number, limit: number) => repo.listMessages(id, afterSeq, limit) }), inject: ['CS_CONVERSATION_REPOSITORY'] },
+    { provide: AcceptConversationUseCase, useFactory: (repo, pool: Pool, clock) => new AcceptConversationUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: TransferConversationUseCase, useFactory: (repo, audit, pool: Pool, clock) => new TransferConversationUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock, audit }), inject: ['CS_CONVERSATION_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: EndConversationUseCase, useFactory: (repo, pool: Pool, clock) => new EndConversationUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: CreateTicketUseCase, useFactory: (repo, pool: Pool, clock) => new CreateTicketUseCase({ tickets: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: ProcessTicketUseCase, useFactory: (repo, pool: Pool, clock) => new ProcessTicketUseCase({ tickets: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: RequestTicketRefundUseCase, useFactory: (repo, refundPort, pool: Pool, clock) => new RequestTicketRefundUseCase({ tickets: repo, refundPort, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', 'CS_REFUND_PORT', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: ConvertConversationToTicketUseCase, useFactory: (tickets, conversations, pool: Pool, clock) => new ConvertConversationToTicketUseCase({ tickets, conversations, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', 'CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: 'MINI_CS_DEPS', useFactory: (create, append, list, repo, end, createTicket, tickets, processTicket) => ({ create, append, list, conversations: repo, end, createTicket, tickets, processTicket }), inject: [CreateConversationUseCase, AppendMessageUseCase, ListMessagesUseCase, 'CS_CONVERSATION_REPOSITORY', EndConversationUseCase, CreateTicketUseCase, 'AFTER_SALES_TICKET_REPOSITORY', ProcessTicketUseCase] },
+    { provide: 'CARD_PROJECTION_DEPS', useFactory: (products, orders, groups, reservations, payments, refunds) => ({
+        product: { findById: (id: string) => products.findById(id) },
+        orders: { findById: (id: string) => orders.findById(id) },
+        groups: { findById: (id: string) => groups.findById(id) },
+        orderBelongsTo: { findByGroupId: async (id: string) => (await reservations.listByGroup(id)).map((r: { state: { userId: string } }) => ({ state: { userId: r.state.userId } })) },
+        payments: { findByOrderId: (id: string) => payments.findByOrderId(id) },
+        refunds: { findByOrderId: (id: string) => refunds.findByOrderId(id) }
+      }), inject: [TOKENS.ProductRepository, 'ORDER_REPOSITORY', 'GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'PAYMENT_REPOSITORY', 'REFUND_REPOSITORY'] },
+    { provide: 'ADMIN_CS_DEPS', useFactory: (accept, transfer, end, append, list, repo, convertTicket, tickets, refund, process) => ({ accept, transfer, end, append, list, conversations: repo, convertTicket, tickets, refund, process }), inject: [AcceptConversationUseCase, TransferConversationUseCase, EndConversationUseCase, AppendMessageUseCase, ListMessagesUseCase, 'CS_CONVERSATION_REPOSITORY', ConvertConversationToTicketUseCase, 'AFTER_SALES_TICKET_REPOSITORY', RequestTicketRefundUseCase, ProcessTicketUseCase] },
     // 跨上下文工作流
     {
       provide: CreateProductWorkflow,

@@ -89,8 +89,8 @@ function seedAdmin(admins, overrides = {}) {
 
 test('角色权限：super_admin 拥有全部权限码，未知角色无权限', () => {
   const permissions = permissionsOfRole('super_admin');
-  // T003 起新增 user:manage（用户管理）
-  assert.deepEqual([...permissions].sort(), ['admin:manage', 'catalog:manage', 'inventory:manage', 'media:manage', 'order:manage', 'user:manage'].sort());
+  // T003 起新增 user:manage（用户管理）；T008 起新增 agent:manage（客服工作台）
+  assert.deepEqual([...permissions].sort(), ['admin:manage', 'agent:manage', 'catalog:manage', 'inventory:manage', 'media:manage', 'order:manage', 'user:manage'].sort());
   assert.equal(can('super_admin', 'catalog:manage'), true);
   assert.equal(can('super_admin', 'media:manage'), true);
   assert.equal(can('super_admin', 'inventory:manage'), true);
