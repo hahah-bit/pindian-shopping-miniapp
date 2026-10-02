@@ -1,0 +1,9 @@
+import test from'node:test';import assert from'node:assert/strict';import{randomUUID}from'node:crypto';import{stack}from'../../../scripts/release/docker.mjs';import{seed}from'../../../scripts/release/seed-rehearsal.mjs';import{backup}from'../../../scripts/release/backup.mjs';import{restore}from'../../../scripts/release/restore.mjs';import{health}from'../../../scripts/release/health.mjs';import{eventually}from'../../helpers/local-stack.mjs';import{validateRestoreTarget}from'../../../scripts/release/backup-guards.mjs';
+test('T012 真实HTTPS业务数据与媒体：暂停写入备份→新项目恢复→健康',async t=>{
+ const source=stack('pindian-rehearsal-source','.env.rehearsal.source',{rehearsal:true});source.run('up','-d','--wait','--wait-timeout','180');const seeded=await seed(source);
+ const suffix=randomUUID().slice(0,8),output='backup/t012-'+suffix,target='pindian-rehearsal-restore-'+suffix;validateRestoreTarget(source.project,target);const dest=stack(target,'.env.rehearsal.restore',{rehearsal:true});
+ t.after(()=>dest.run('down','--volumes'));
+ const m=backup({project:source.project,envFile:source.envFile,output,rehearsal:true});assert.ok(m.facts.orders.count>=2);assert.ok(m.facts.payments.count>=2);assert.ok(m.facts.fulfillment_orders.count>=2);assert.ok(m.mediaFiles.length>0);
+ await eventually(()=>health({project:source.project,envFile:source.envFile,rehearsal:true}),30000);
+ const restored=restore({project:target,envFile:dest.envFile,directory:output,rehearsal:true});assert.deepEqual(restored.facts,m.facts);const virtual=JSON.parse(dest.exec('simulator','node','-e',"console.log(require('node:fs').readFileSync('/state/payment.json','utf8'))"));assert.ok(virtual.orders.length>=seeded.orders.length);assert.ok(virtual.orders.some(([,o])=>o.trade_state==='SUCCESS'));await health({project:target,envFile:dest.envFile,rehearsal:true});assert.throws(()=>restore({project:target,envFile:dest.envFile,directory:output,rehearsal:true}),/已有容器或卷/);
+});
