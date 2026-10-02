@@ -1,13 +1,15 @@
 import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
+import {readFileSync} from 'node:fs';
+import {createPaymentHandler} from './payment.mjs';
 
 export async function startSimulator(config) {
  if(config.appEnv!=='simulation'||!config.controlToken)throw Error('必须显式simulation且配置控制令牌');
  const users=['alice','bob','charlie'];const codes=new Map();const state={codes};
  const now=config.now??Date.now;
  const server=createServer(async(req,res)=>{
-  const reply=(status,body)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(body));};
+  const reply=(status,body)=>{const raw=JSON.stringify(body);res.writeHead(status,{'Content-Type':'application/json',...(config.paymentHandler?.signResponse?config.paymentHandler.signResponse(raw):{})});res.end(raw);};
   try {
    const url=new URL(req.url,'http://simulator');let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>65536){reply(413,{error:'too_large'});return;}}
    const body=raw?JSON.parse(raw):{};
@@ -41,6 +43,7 @@ export async function startSimulator(config) {
 }
 
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
- const sim=await startSimulator({appEnv:process.env.APP_ENV,controlToken:process.env.SIMULATION_CONTROL_TOKEN,appid:process.env.WX_APPID,secret:process.env.WX_APP_SECRET,port:Number(process.env.PORT??3999),host:'0.0.0.0'});
+ const paymentHandler=process.env.WX_PAY_APIV3_KEY?createPaymentHandler({appid:process.env.WX_APPID,mchid:process.env.WX_PAY_MCHID,apiV3Key:process.env.WX_PAY_APIV3_KEY,merchantPublicKey:readFileSync('/run/wechat/merchant-public.pem','utf8'),platformPrivateKey:readFileSync('/run/wechat/platform.pem','utf8'),notifyUrl:process.env.WX_PAY_NOTIFY_URL,stateFile:'/state/payment.json'}):null;
+ const sim=await startSimulator({appEnv:process.env.APP_ENV,controlToken:process.env.SIMULATION_CONTROL_TOKEN,appid:process.env.WX_APPID,secret:process.env.WX_APP_SECRET,port:Number(process.env.PORT??3999),host:'0.0.0.0',paymentHandler});
  console.log('本地模拟服务已启动，仅使用虚拟凭据');for(const signal of ['SIGTERM','SIGINT'])process.on(signal,async()=>{await sim.close();process.exit(0);});
 }

@@ -36,6 +36,9 @@
     "test:task:t010": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t010",
     "test:task:t011": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t011",
     "test:task:t012": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t012",
-    "sim:init": "node scripts/simulation/init.mjs"
+    "sim:init": "node scripts/simulation/init.mjs",
+    "sim:up": "node scripts/simulation/stack.mjs up",
+    "sim:down": "node scripts/simulation/stack.mjs down",
+    "sim:status": "node scripts/simulation/stack.mjs status"
   }
 }

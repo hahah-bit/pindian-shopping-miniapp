@@ -1,0 +1,7 @@
+import{readFileSync}from'node:fs';import{parseEnv}from'node:util';import assert from'node:assert/strict';import{spawnSync}from'node:child_process';
+const e=parseEnv(readFileSync('.env.simulation','utf8'));
+const control=async(action)=>{const r=await fetch('http://127.0.0.1:3399/simulation/control',{method:'POST',headers:{Authorization:`Bearer ${e.SIMULATION_CONTROL_TOKEN}`,'Content-Type':'application/json'},body:JSON.stringify({action,user:'alice'})});assert.equal(r.status,200);return(await r.json()).code;};
+const login=await fetch('http://127.0.0.1:3300/api/mini/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:await control('login-code')})});assert.equal(login.status,200);const token=(await login.json()).data.token;
+const phone=await fetch('http://127.0.0.1:3300/api/mini/v1/auth/phone',{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({code:await control('phone-code')})});assert.equal(phone.status,200);assert.equal((await phone.json()).data.phoneVerified,true);
+assert.equal((await fetch('http://127.0.0.1:8380/api/health/ready')).status,200);
+const r=spawnSync('docker',['compose','--env-file','.env.simulation','-p','pindian-simulation','-f','compose.yaml','-f','compose.simulation.yaml','exec','-T','worker','node','infra/docker/health-worker.cjs'],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);console.log('模拟Docker冒烟通过：真实登录/手机号、后台代理、Worker健康；没有真实资金。');

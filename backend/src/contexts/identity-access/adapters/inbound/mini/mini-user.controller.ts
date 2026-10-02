@@ -44,6 +44,7 @@ export class MiniProfileController {
 
   @AuthRealm('user')
   @Post('phone')
+  @HttpCode(200)
   async bindPhoneNumber(@Body() body: { code?: unknown }, @Req() request: RequestWithPrincipal): Promise<ApiResponse<PhoneBindResult>> {
     const auth = request.userAuth!;
     const result = await this.bindPhoneCase.execute({ userId: auth.userId, code: body?.code });

@@ -1,0 +1,23 @@
+import test from 'node:test';import assert from 'node:assert/strict';import{generateKeyPairSync}from'node:crypto';import{mkdtempSync,writeFileSync,rmSync}from'node:fs';import{tmpdir}from'node:os';import{join}from'node:path';import{createRequire}from'node:module';
+import{startSimulator}from'../../../infra/simulation/server.mjs';import{createPaymentHandler}from'../../../infra/simulation/payment.mjs';
+const require=createRequire(import.meta.url);const{HttpWxPayAdapter}=require('../../../backend/dist/contexts/payments/adapters/outbound/wechat/wx-pay.adapter.js');const{WxPayNotifyVerifier}=require('../../../backend/dist/contexts/payments/adapters/outbound/wechat/wx-pay-notify-verifier.js');
+test('F043 真实支付HTTP适配器与回调验签：显式状态、退款、故障、幂等',async(t)=>{
+ const dir=mkdtempSync(join(tmpdir(),'pindian-sim-pay-'));t.after(()=>rmSync(dir,{recursive:true,force:true}));
+ const keys=()=>generateKeyPairSync('rsa',{modulusLength:2048,publicKeyEncoding:{type:'spki',format:'pem'},privateKeyEncoding:{type:'pkcs8',format:'pem'}});const merchant=keys(),platform=keys();
+ const priv=join(dir,'merchant.pem'),pub=join(dir,'platform.pem');writeFileSync(priv,merchant.privateKey);writeFileSync(pub,platform.publicKey);const apiV3Key='12345678901234567890123456789012';
+ const options={merchantPublicKey:merchant.publicKey,platformPrivateKey:platform.privateKey,apiV3Key,mchid:'sim-mch',appid:'sim-app',stateFile:join(dir,'state.json')};const handler=createPaymentHandler(options);
+ const sim=await startSimulator({appEnv:'simulation',controlToken:'control',paymentHandler:handler});t.after(()=>sim.close());
+ const pay=new HttpWxPayAdapter({appid:'sim-app',mchid:'sim-mch',apiV3Key,serialNo:'sim-merchant',privateKeyPath:priv,platformPublicKeyPath:pub,notifyUrl:'http://127.0.0.1/callback',endpointBase:sim.baseUrl});
+ const control=async(body)=>{const r=await fetch(sim.baseUrl+'/simulation/control',{method:'POST',headers:{Authorization:'Bearer control','Content-Type':'application/json'},body:JSON.stringify(body)});assert.equal(r.status,200);return r.json();};
+ const order={outTradeNo:'SIM-O1',amountFen:503,openid:'sim-alice',description:'本地测试',notifyUrl:pay.notifyUrl};
+ const init=await pay.createJsapiOrder(order);assert.ok(init.prepayId);assert.equal((await pay.queryOrderByOutTradeNo('SIM-O1')).tradeState,'NOTPAY');
+ await assert.rejects(()=>pay.createJsapiOrder({...order,amountFen:504}));
+ await control({action:'payment-state',outTradeNo:'SIM-O1',tradeState:'SUCCESS'});assert.equal((await pay.queryOrderByOutTradeNo('SIM-O1')).payerTotal,503);
+ const packet=handler.notification('payment','SIM-O1');const verifier=new WxPayNotifyVerifier({configured:true,apiV3Key,mchid:'sim-mch',platformPublicKeyPath:pub});assert.equal(verifier.verify(packet.raw,packet.headers).decrypted.payerTotal,503);assert.equal(verifier.verify(packet.raw+' ',packet.headers).valid,false);
+ const refund=await pay.submitRefund({outRefundNo:'SIM-R1',outTradeNo:'SIM-O1',refundFen:503,totalFen:503,reason:'本地测试'});assert.equal(refund.status,'PROCESSING');
+ await control({action:'refund-state',outRefundNo:'SIM-R1',status:'SUCCESS'});assert.equal((await pay.queryRefund('SIM-R1')).status,'SUCCESS');assert.equal(verifier.verify(...(()=>{const p=handler.notification('refund','SIM-R1');return[p.raw,p.headers];})()).decrypted.refundStatus,'SUCCESS');
+ const restored=createPaymentHandler(options);assert.equal(restored.orders.get('SIM-O1')?.trade_state,'SUCCESS');assert.equal(restored.refunds.get('SIM-R1')?.status,'SUCCESS');
+ await assert.rejects(()=>pay.submitRefund({outRefundNo:'SIM-R2',outTradeNo:'SIM-O1',refundFen:1,totalFen:503,reason:'超额'}));
+ await control({action:'failure',operation:'query',enabled:true});await assert.rejects(()=>pay.queryOrderByOutTradeNo('SIM-O1'),e=>e.code==='CHANNEL_SYSTEM_ERROR');
+ const invalid=await fetch(sim.baseUrl+'/v3/pay/transactions/jsapi',{method:'POST',body:'{}'});assert.equal(invalid.status,401);
+});

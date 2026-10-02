@@ -7,10 +7,14 @@ services:
       APP_ENV: simulation
       WX_APPID: ${WX_APPID}
       WX_APP_SECRET: ${WX_APP_SECRET}
+      WX_PAY_MCHID: ${WX_PAY_MCHID}
+      WX_PAY_APIV3_KEY: ${WX_PAY_APIV3_KEY}
+      WX_PAY_NOTIFY_URL: ${WX_PAY_NOTIFY_URL}
       SIMULATION_CONTROL_TOKEN: ${SIMULATION_CONTROL_TOKEN}
     volumes:
       - ./infra/simulation:/sim:ro
       - ./data/simulation/keys:/run/wechat:ro
+      - simulator-data:/state
     ports:
       - "127.0.0.1:3399:3999"
     healthcheck:
@@ -26,3 +30,5 @@ services:
   worker:
     environment:
       APP_ENV: simulation
+volumes:
+  simulator-data:
