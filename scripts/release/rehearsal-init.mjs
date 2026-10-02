@@ -1,0 +1,11 @@
+import{mkdirSync,copyFileSync,writeFileSync,readFileSync,existsSync}from'node:fs';import{parseEnv}from'node:util';import{spawnSync}from'node:child_process';import{resolve}from'node:path';import{docker}from'./docker.mjs';
+const e=parseEnv(readFileSync('.env.simulation','utf8'));if(e.APP_ENV!=='simulation')throw Error('请先 sim:init');
+for(const dir of ['keys','tls'])mkdirSync('data/release/'+dir,{recursive:true});
+for(const [source,target]of [['merchant.pem','merchant-private.pem'],['platform-public.pem','platform-public.pem'],['platform.pem','platform.pem'],['merchant-public.pem','merchant-public.pem'],['merchant.pem','merchant.pem']])copyFileSync('data/simulation/keys/'+source,'data/release/keys/'+target);
+writeFileSync('data/release/tls/request.cnf','[req]\ndistinguished_name=dn\n[dn]\nCN=localhost\n');
+if(!existsSync('data/release/tls/fullchain.pem')){const r=spawnSync('openssl',['req','-config','data/release/tls/request.cnf','-x509','-newkey','rsa:2048','-nodes','-sha256','-days','3','-keyout','data/release/tls/privkey.pem','-out','data/release/tls/fullchain.pem','-subj','/CN=localhost','-addext','subjectAltName=DNS:localhost,IP:127.0.0.1'],{stdio:'ignore'});if(r.status!==0)throw Error('临时TLS生成失败，需要openssl');}
+const sha=spawnSync('git',['rev-parse','--short=12','HEAD'],{encoding:'utf8'}).stdout.trim();
+docker(['build','-f','backend/Dockerfile','-t','pindian-api:'+sha,'.'],{stdio:'inherit'});docker(['build','-f','apps/admin-web/Dockerfile','-t','pindian-admin:'+sha,'.'],{stdio:'inherit'});
+const common={...e,RELEASE_IMAGE:'pindian-api:'+sha,ADMIN_RELEASE_IMAGE:'pindian-admin:'+sha,WECHAT_KEYS_DIR:resolve('data/release/keys').replaceAll('\\','/'),TLS_DIR:resolve('data/release/tls').replaceAll('\\','/'),PUBLIC_API_BASE_URL:'https://localhost:8443',CORS_ORIGINS:'https://localhost:8443',WX_PAY_NOTIFY_URL:'http://api:3000/api/payments/v1/notify'};
+for(const [name,port]of [['source',8443],['restore',8444]])writeFileSync('.env.rehearsal.'+name,Object.entries({...common,POSTGRES_DB:'pindian_rehearsal_'+name,HTTPS_BIND:'127.0.0.1:'+port,PUBLIC_API_BASE_URL:'https://localhost:'+port,CORS_ORIGINS:'https://localhost:'+port}).map(([k,v])=>k+'='+v).join('\n')+'\n');
+console.log('本地演练配置和固定镜像已生成；凭据不输出，TLS只用于演练。');

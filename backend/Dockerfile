@@ -25,9 +25,10 @@ COPY --from=build /workspace/contracts/dist contracts/dist
 COPY contracts/openapi.yaml contracts/openapi.yaml
 COPY infra/docker/health-api.cjs infra/docker/health-api.cjs
 COPY infra/docker/health-worker.cjs infra/docker/health-worker.cjs
+COPY infra/docker/start-api.cjs infra/docker/start-api.cjs
 # 媒体文件目录（compose 挂载命名卷 media-data）
 RUN mkdir -p /var/lib/pindian/media && chown node:node /var/lib/pindian/media
 USER node
 EXPOSE 3000
 # 启动前执行迁移（advisory lock 保证与 worker/重试并发安全）
-CMD ["sh", "-c", "node backend/dist/bootstrap/migrate.js && node backend/dist/bootstrap/main.js"]
+CMD ["node", "infra/docker/start-api.cjs"]

@@ -11,3 +11,5 @@ apps/mini-program/project.private.config.json
 backup/
 data/simulation/
 data/release/
+
+!.env.production.example

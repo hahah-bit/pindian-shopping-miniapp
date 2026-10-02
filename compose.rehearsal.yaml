@@ -1,0 +1,29 @@
+# 仅本地演练：覆盖生产环境模式，禁止用于正式部署。
+services:
+  api:
+    environment: {APP_ENV: simulation, WX_API_BASE_URL: 'http://simulator:3999', WX_PAY_ENDPOINT_BASE: 'http://simulator:3999'}
+  worker:
+    environment: {APP_ENV: simulation, WX_API_BASE_URL: 'http://simulator:3999', WX_PAY_ENDPOINT_BASE: 'http://simulator:3999'}
+  simulator:
+    image: node:24-alpine
+    command: [node, /sim/server.mjs]
+    environment:
+      APP_ENV: simulation
+      WX_APPID: ${WX_APPID}
+      WX_APP_SECRET: ${WX_APP_SECRET}
+      WX_PAY_MCHID: ${WX_PAY_MCHID}
+      WX_PAY_APIV3_KEY: ${WX_PAY_APIV3_KEY}
+      WX_PAY_NOTIFY_URL: http://api:3000/api/payments/v1/notify
+      SIMULATION_CONTROL_TOKEN: ${SIMULATION_CONTROL_TOKEN}
+    volumes:
+      - ./infra/simulation:/sim:ro
+      - ${WECHAT_KEYS_DIR}:/run/wechat:ro
+      - simulator-data:/state
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3999/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    init: true
+volumes:
+  simulator-data:
