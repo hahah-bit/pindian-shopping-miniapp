@@ -11,9 +11,10 @@ export class ScanTimeoutConversations {
 
   async execute(input: { limit?: number } = {}): Promise<{ scanned: number; created: number }> {
     const limit = input.limit ?? 100;
-    const overdue = await this.deps.scanPort.findOverdueConversations(this.deps.thresholdMinutes, limit);
     let recipients = await this.deps.scanPort.findOnlineSupervisors(60);
     if (recipients.length === 0) recipients = await this.deps.scanPort.listActiveSupervisors();
+    if (recipients.length === 0) return { scanned: 0, created: 0 };
+    const overdue = await this.deps.scanPort.findOverdueConversations(this.deps.thresholdMinutes, limit, recipients.map((r) => r.adminId));
     let created = 0;
     for (const conversation of overdue) {
       for (const recipient of recipients) {

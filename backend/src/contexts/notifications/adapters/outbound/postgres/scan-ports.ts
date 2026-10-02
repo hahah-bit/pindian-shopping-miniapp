@@ -9,7 +9,7 @@ export class PostgresNotificationScanPort implements CsTimeoutScanPort, Business
     this.pool = pool;
   }
 
-  async findOverdueConversations(thresholdMinutes: number, limit: number): Promise<Array<{ conversationId: string; userId: string; createdAt: Date }>> {
+  async findOverdueConversations(thresholdMinutes: number, limit: number, recipientAdminIds?: string[]): Promise<Array<{ conversationId: string; userId: string; createdAt: Date }>> {
     const rows = await this.pool.query(
       `SELECT c.id, c.user_id, c.created_at
          FROM cs_conversations c
@@ -19,9 +19,13 @@ export class PostgresNotificationScanPort implements CsTimeoutScanPort, Business
             SELECT 1 FROM cs_messages m
              WHERE m.conversation_id = c.id AND m.sender = 'agent' AND m.internal = false
           )
-        ORDER BY c.created_at
+          AND ($3::uuid[] IS NULL OR EXISTS (
+            SELECT 1 FROM unnest($3::uuid[]) AS recipient(id)
+             WHERE NOT EXISTS (SELECT 1 FROM notifications n WHERE n.idempotency_key = 'cs.conversation.timeout:' || c.id::text || ':' || recipient.id::text)
+          ))
+        ORDER BY c.created_at, c.id
         LIMIT $2`,
-      [thresholdMinutes, limit]
+      [thresholdMinutes, limit, recipientAdminIds ?? null]
     );
     return rows.rows.map((r) => ({ conversationId: String(r.id), userId: String(r.user_id), createdAt: new Date(r.created_at as string) }));
   }

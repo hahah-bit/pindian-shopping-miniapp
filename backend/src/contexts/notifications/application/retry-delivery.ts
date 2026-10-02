@@ -5,7 +5,8 @@ import type { Clock } from './record-notification';
 
 export interface RetryDeliveryDeps {
   repository: NotificationRepository;
-  audit: { execute(input: { adminId: string | null; action: string; resourceType: string; resourceId?: string; detail?: Record<string, unknown>; requestId?: string }): Promise<void> };
+  audit: { execute(input: { adminId: string | null; action: string; resourceType: string; resourceId?: string; detail?: Record<string, unknown>; requestId?: string }, sessionTx?: unknown): Promise<void> };
+  runner?: { run<T>(work: (tx: unknown) => Promise<T>): Promise<T> };
   clock: Clock;
 }
 
@@ -14,10 +15,11 @@ export class RetryDelivery {
   constructor(private readonly deps: RetryDeliveryDeps) {}
 
   async execute(input: { deliveryId: string; adminId: string | null; requestId: string }): Promise<{ delivery: DeliveryState }> {
-    const found = await this.deps.repository.findDeliveryById(input.deliveryId);
+    const work = async (tx?: unknown): Promise<{ delivery: DeliveryState }> => {
+    const found = await this.deps.repository.findDeliveryById(input.deliveryId, tx);
     if (!found) throw new ApplicationError('NOT_FOUND', '投递不存在');
     assertManualRetryable(found.delivery);
-    const delivery = await this.deps.repository.resetDeliveryFailed(input.deliveryId, this.deps.clock.now());
+    const delivery = await this.deps.repository.resetDeliveryFailed(input.deliveryId, this.deps.clock.now(), tx);
     if (!delivery) throw new ApplicationError('DELIVERY_NOT_RETRYABLE', '投递状态已变化，请刷新后重试');
     await this.deps.audit.execute({
       adminId: input.adminId,
@@ -26,8 +28,9 @@ export class RetryDelivery {
       resourceId: input.deliveryId,
       detail: { notificationId: found.notification.state.notificationId, channel: delivery.channel },
       requestId: input.requestId
-    });
+    }, tx);
     return { delivery };
+    };
+    return this.deps.runner ? this.deps.runner.run(work) : work();
   }
 }
-

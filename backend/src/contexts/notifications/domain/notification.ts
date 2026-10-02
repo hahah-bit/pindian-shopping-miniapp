@@ -5,6 +5,8 @@ export type DeliveryStatusValue = 'pending' | 'sent' | 'skipped' | 'failed';
 export const DEFAULT_DELIVERY_CHANNEL = 'wechat_subscribe_message';
 
 export interface DeliveryState {
+  /** 内部认领令牌，不进入 HTTP DTO。 */
+  leaseToken?: string | null;
   deliveryId: string | null;
   notificationId: string | null;
   channel: string;

@@ -1,14 +1,15 @@
 import type { Pool, PoolClient } from 'pg';
-import { withExecutor, type PgExecutor } from '../../../../../adapters-shared/pg-client';
+import { withExecutor, isPoolClient, type PgExecutor } from '../../../../../adapters-shared/pg-client';
 import { Notification, type DeliveryState, type DeliveryStatusValue, type NotificationState } from '../../../domain/notification';
 import type { NotificationRepository } from '../../../application/ports';
 
 type Row = Record<string, unknown>;
 
-const DELIVERY_COLUMNS = `id, notification_id, channel, status, attempt_count, max_attempts, last_error, next_attempt_at, sent_at, skipped_reason, updated_at`;
+const DELIVERY_COLUMNS = `id, notification_id, channel, status, attempt_count, max_attempts, last_error, next_attempt_at, sent_at, skipped_reason, updated_at, lease_token`;
 
 function deliveryOf(row: Row): DeliveryState {
   return {
+    leaseToken: row.lease_token ? String(row.lease_token) : null,
     deliveryId: String(row.id),
     notificationId: String(row.notification_id),
     channel: String(row.channel),
@@ -49,6 +50,9 @@ export class PostgresNotificationRepository implements NotificationRepository {
 
   async insertIfAbsent(notification: Notification): Promise<{ created: boolean; notification: Notification }> {
     return withExecutor(this.pool, async (client) => {
+      const ownTransaction = !isPoolClient(this.pool);
+      if (ownTransaction) await client.query('BEGIN');
+      try {
       const s = notification.state;
       const inserted = await client.query<Row>(
         `INSERT INTO notifications (id, recipient_admin_id, recipient_user_id, event_type, title, body, reference, idempotency_key, created_at)
@@ -59,6 +63,7 @@ export class PostgresNotificationRepository implements NotificationRepository {
       );
       if (inserted.rows.length === 0 || inserted.rows[0] === undefined) {
         const existing = await this.findByKey(s.idempotencyKey, client);
+        if (ownTransaction) await client.query('COMMIT');
         return { created: false, notification: existing as Notification };
       }
       const notificationId = String(inserted.rows[0].id);
@@ -74,7 +79,12 @@ export class PostgresNotificationRepository implements NotificationRepository {
         delivery.deliveryId = String(deliveryIdRow.id);
         delivery.notificationId = notificationId;
       }
+      if (ownTransaction) await client.query('COMMIT');
       return { created: true, notification };
+      } catch (error) {
+        if (ownTransaction) await client.query('ROLLBACK');
+        throw error;
+      }
     });
   }
 
@@ -108,10 +118,11 @@ export class PostgresNotificationRepository implements NotificationRepository {
     return withExecutor(this.pool, async (client) => {
       const claimed = await client.query<Row>(
         `UPDATE notification_deliveries d
-            SET next_attempt_at = $2 + make_interval(mins => $3), updated_at = $2
+            SET lease_until = $2 + make_interval(mins => $3), lease_token = gen_random_uuid(), updated_at = $2
           WHERE d.id IN (
             SELECT id FROM notification_deliveries
-             WHERE status = 'pending' OR (status = 'failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= $2)
+             WHERE (status = 'pending' OR (status = 'failed' AND next_attempt_at IS NOT NULL AND next_attempt_at <= $2))
+               AND (lease_until IS NULL OR lease_until <= $2)
              ORDER BY created_at
              FOR UPDATE SKIP LOCKED
              LIMIT $1
@@ -135,15 +146,15 @@ export class PostgresNotificationRepository implements NotificationRepository {
     await withExecutor(this.pool, async (client) => {
       await client.query(
         `UPDATE notification_deliveries
-            SET status=$2, attempt_count=$3, max_attempts=$4, last_error=$5, next_attempt_at=$6, sent_at=$7, skipped_reason=$8, updated_at=$9
-          WHERE id=$1`,
-        [delivery.deliveryId, delivery.status, delivery.attemptCount, delivery.maxAttempts, delivery.lastError, delivery.nextAttemptAt, delivery.sentAt, delivery.skippedReason, delivery.updatedAt]
+            SET status=$2, attempt_count=$3, max_attempts=$4, last_error=$5, next_attempt_at=$6, sent_at=$7, skipped_reason=$8, updated_at=$9, lease_token=NULL, lease_until=NULL
+          WHERE id=$1 AND lease_token IS NOT DISTINCT FROM $10::uuid`,
+        [delivery.deliveryId, delivery.status, delivery.attemptCount, delivery.maxAttempts, delivery.lastError, delivery.nextAttemptAt, delivery.sentAt, delivery.skippedReason, delivery.updatedAt, delivery.leaseToken ?? null]
       );
     });
   }
 
-  async findDeliveryById(deliveryId: string): Promise<{ delivery: DeliveryState; notification: Notification } | null> {
-    return withExecutor(this.pool, async (client) => {
+  async findDeliveryById(deliveryId: string, sessionTx?: unknown): Promise<{ delivery: DeliveryState; notification: Notification } | null> {
+    return withExecutor(isPoolClient(sessionTx) ? sessionTx : this.pool, async (client) => {
       const row = await client.query<Row>(`SELECT ${DELIVERY_COLUMNS} FROM notification_deliveries WHERE id=$1`, [deliveryId]);
       const deliveryFirst = row.rows[0];
       if (!deliveryFirst) return null;
@@ -155,12 +166,12 @@ export class PostgresNotificationRepository implements NotificationRepository {
     });
   }
 
-  async resetDeliveryFailed(deliveryId: string, now: Date): Promise<DeliveryState | null> {
-    return withExecutor(this.pool, async (client) => {
+  async resetDeliveryFailed(deliveryId: string, now: Date, sessionTx?: unknown): Promise<DeliveryState | null> {
+    return withExecutor(isPoolClient(sessionTx) ? sessionTx : this.pool, async (client) => {
       const row = await client.query<Row>(
         `UPDATE notification_deliveries
-            SET status='pending', attempt_count=0, last_error=NULL, next_attempt_at=NULL, updated_at=$2
-          WHERE id=$1 AND status='failed'
+            SET status='pending', attempt_count=0, last_error=NULL, next_attempt_at=NULL, updated_at=$2, lease_token=NULL, lease_until=NULL
+          WHERE id=$1 AND status='failed' AND (lease_until IS NULL OR lease_until <= $2)
           RETURNING ${DELIVERY_COLUMNS}`,
         [deliveryId, now]
       );

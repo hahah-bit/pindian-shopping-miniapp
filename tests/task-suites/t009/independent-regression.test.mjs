@@ -1,0 +1,70 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { parseEnv } from 'node:util';
+import { spawnSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
+import pg from 'pg';
+const require = createRequire(import.meta.url);
+const { Notification, recordDeliveryAttempt } = require('../../../backend/dist/contexts/notifications/domain/notification.js');
+const { PostgresNotificationRepository } = require('../../../backend/dist/contexts/notifications/adapters/outbound/postgres/notification-repository.js');
+const { PostgresNotificationScanPort } = require('../../../backend/dist/contexts/notifications/adapters/outbound/postgres/scan-ports.js');
+const { ScanTimeoutConversations } = require('../../../backend/dist/contexts/notifications/application/timeout-reminder.js');
+const { RecordNotification } = require('../../../backend/dist/contexts/notifications/application/record-notification.js');
+const { RetryDelivery } = require('../../../backend/dist/contexts/notifications/application/retry-delivery.js');
+const env = parseEnv(await readFile('.env', 'utf8'));
+test('T009 独立真实PG回归', async (t) => {
+  const source = process.env.PINDIAN_TEST_DATABASE_URL || env.DATABASE_URL;
+  assert.ok(source, '必须有测试数据库，禁止跳过');
+  const admin = new pg.Client({ connectionString: source }); await admin.connect();
+  const name = 'pindian_t009_independent_test';
+  await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`); await admin.query(`CREATE DATABASE ${name}`);
+  const url = new URL(source); url.pathname = '/' + name;
+  const migrate = spawnSync(process.execPath, ['backend/dist/bootstrap/migrate.js'], { env: { ...process.env, DATABASE_URL: url.href }, encoding: 'utf8' });
+  assert.equal(migrate.status, 0, migrate.stderr);
+  const db = new pg.Pool({ connectionString: url.href });
+  t.after(async () => { await db.end(); await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`); await admin.end(); });
+  const user = randomUUID(); await db.query(`INSERT INTO users(id,nickname,status) VALUES($1,'独立回归','active')`, [user]);
+  const repo = new PostgresNotificationRepository(db);
+  const create = (key) => Notification.create({ recipientUserId: user, eventType: 'regression', title: '测试', body: '测试', idempotencyKey: key }, new Date());
+  await t.test('R01 投递故障不能遗留孤立通知', async () => {
+    await db.query(`CREATE FUNCTION reject_delivery() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected failure'; END $$`);
+    await db.query(`CREATE TRIGGER reject_delivery BEFORE INSERT ON notification_deliveries FOR EACH ROW EXECUTE FUNCTION reject_delivery()`);
+    await assert.rejects(() => repo.insertIfAbsent(create('atomic')), /injected failure/);
+    await db.query('DROP TRIGGER reject_delivery ON notification_deliveries');
+    assert.equal((await db.query(`SELECT count(*)::int c FROM notifications WHERE idempotency_key='atomic'`)).rows[0].c, 0);
+    const retry = await repo.insertIfAbsent(create('atomic')); assert.equal(retry.created, true); assert.equal(retry.notification.state.deliveries.length, 1);
+  });
+  await t.test('R02 租约排他、过期恢复和旧持有者保存隔离', async () => {
+    await db.query('DELETE FROM notification_deliveries');
+    await repo.insertIfAbsent(create('lease'));
+    const now = new Date(); const first = await repo.claimDueDeliveries(10, now, 5);
+    assert.equal(first.length, 1);
+    assert.equal((await repo.claimDueDeliveries(10, now, 5)).length, 0, '有效租约不能重认领');
+    const later = new Date(now.getTime() + 301000); const second = await repo.claimDueDeliveries(10, later, 5);
+    assert.equal(second.length, 1, '崩溃到期可恢复');
+    recordDeliveryAttempt(second[0].delivery, { outcome: 'skipped', reason: 'channel_not_configured' }, later); await repo.saveDelivery(second[0].delivery);
+    recordDeliveryAttempt(first[0].delivery, { outcome: 'failed', error: 'stale' }, now); await repo.saveDelivery(first[0].delivery);
+    assert.equal((await repo.findDeliveryById(second[0].delivery.deliveryId)).delivery.status, 'skipped', '旧进程不能覆盖新终态');
+  });
+  await t.test('R03 超时批次向后推进，新增主管可补提醒', async () => {
+    const supervisor = randomUUID(); await db.query(`INSERT INTO admins(id,username,display_name,password_hash,role,status) VALUES($1,'reg-supervisor','主管','x','cs_supervisor','active')`, [supervisor]);
+    for (let i = 0; i < 3; i++) { const u = randomUUID(); await db.query(`INSERT INTO users(id,nickname,status) VALUES($1,'批次','active')`, [u]); await db.query(`INSERT INTO cs_conversations(id,user_id,status,created_at) VALUES($1,$2,'queued',now()-make_interval(mins=>$3))`, [randomUUID(),u,30-i]); }
+    const scanPort = new PostgresNotificationScanPort(db);
+    const recorder = new RecordNotification({ repository: repo, clock: { now: () => new Date() } });
+    const reminder = new ScanTimeoutConversations({ scanPort, recorder, clock: { now: () => new Date() }, thresholdMinutes: 15 });
+    for (let i = 0; i < 3; i++) assert.equal((await reminder.execute({ limit: 1 })).created, 1, '旧已提醒会话不得饿死新会话');
+    assert.equal((await reminder.execute({ limit: 1 })).created, 0);
+    const sup2 = randomUUID(); await db.query(`INSERT INTO admins(id,username,display_name,password_hash,role,status) VALUES($1,'reg-supervisor2','主管二','x','cs_supervisor','active')`, [sup2]);
+    assert.equal((await reminder.execute({ limit: 10 })).created, 3);
+  });
+  await t.test('R04 审计失败时手工重试也回滚', async () => {
+    const result = await repo.insertIfAbsent(create('retry-audit')); const d = result.notification.state.deliveries[0];
+    await db.query(`UPDATE notification_deliveries SET status='failed', attempt_count=5 WHERE id=$1`, [d.deliveryId]);
+    const runner = { async run(work) { const c = await db.connect(); try { await c.query('BEGIN'); const r = await work(c); await c.query('COMMIT'); return r; } catch(e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } } };
+    const retry = new RetryDelivery({ repository: repo, runner, audit: { async execute() { throw new Error('audit failure'); } }, clock: { now: () => new Date() } });
+    await assert.rejects(() => retry.execute({ deliveryId: d.deliveryId, adminId: null, requestId: 'r04' }), /audit failure/);
+    assert.equal((await repo.findDeliveryById(d.deliveryId)).delivery.status, 'failed');
+  });
+});

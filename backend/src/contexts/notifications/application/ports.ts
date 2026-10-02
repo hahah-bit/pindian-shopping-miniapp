@@ -10,9 +10,9 @@ export interface NotificationRepository {
   /** 认领到期投递（租约式，FOR UPDATE SKIP LOCKED 防并发重复驱动），连同所属通知一并返回。 */
   claimDueDeliveries(limit: number, now: Date, leaseMinutes: number): Promise<Array<{ delivery: DeliveryState; notification: Notification }>>;
   saveDelivery(delivery: DeliveryState): Promise<void>;
-  findDeliveryById(deliveryId: string): Promise<{ delivery: DeliveryState; notification: Notification } | null>;
+  findDeliveryById(deliveryId: string, sessionTx?: unknown): Promise<{ delivery: DeliveryState; notification: Notification } | null>;
   /** 条件重置：仅 failed 生效；返回 null 表示状态已变（并发冲突）。 */
-  resetDeliveryFailed(deliveryId: string, now: Date): Promise<DeliveryState | null>;
+  resetDeliveryFailed(deliveryId: string, now: Date, sessionTx?: unknown): Promise<DeliveryState | null>;
   listDeliveries(query: { status?: string | null; channel?: string | null; eventType?: string | null; page: number; pageSize: number }): Promise<{ items: Array<{ delivery: DeliveryState; notification: Notification; recipientType: 'admin' | 'user'; recipientName: string }>; total: number }>;
   listUserNotifications(userId: string, page: number, pageSize: number): Promise<{ items: Notification[]; total: number; unreadCount: number }>;
   findUserNotification(notificationId: string, userId: string): Promise<Notification | null>;
@@ -27,7 +27,7 @@ export interface NotificationChannelPort {
 
 /** 客服超时扫描（D022）：对 CustomerService/IdentityAccess 事实的只读查询。 */
 export interface CsTimeoutScanPort {
-  findOverdueConversations(thresholdMinutes: number, limit: number): Promise<Array<{ conversationId: string; userId: string; createdAt: Date }>>;
+  findOverdueConversations(thresholdMinutes: number, limit: number, recipientAdminIds?: string[]): Promise<Array<{ conversationId: string; userId: string; createdAt: Date }>>;
   findOnlineSupervisors(onlineWindowSeconds: number): Promise<Array<{ adminId: string; displayName: string }>>;
   listActiveSupervisors(): Promise<Array<{ adminId: string; displayName: string }>>;
 }

@@ -154,9 +154,9 @@ test('T009 集成：看板三端点与权限、通知管道、超时提醒、审
       [id, orderNo, userId, P, groupId, status, randomUUID(), paidAt]
     );
   }
-  seedOrder(O1, 'PO-T009I-1', UA, G1, 'paid', new Date());
-  seedOrder(O2, 'PO-T009I-2', UB, G1, 'paid', new Date());
-  seedOrder(O3, 'PO-T009I-3', UA, G2, 'unpaid', null);
+  await seedOrder(O1, 'PO-T009I-1', UA, G1, 'paid', new Date());
+  await seedOrder(O2, 'PO-T009I-2', UB, G1, 'paid', new Date());
+  await seedOrder(O3, 'PO-T009I-3', UA, G2, 'unpaid', null);
   const PAY1 = randomUUID();
   const PAY2 = randomUUID();
   await db.query(`INSERT INTO payments (id, order_id, user_id, amount_fen, status, out_trade_no, applied_result) VALUES ($1,$2,$3,25250,'succeeded','T009I-P1','applied')`, [PAY1, O1, UA]);

@@ -30,6 +30,7 @@ export class RecordOperation {
       });
       await this.deps.repository.insert(log, sessionTx);
     } catch (error) {
+      if (sessionTx) throw error;
       console.error('[audit] 操作日志写入失败', error instanceof Error ? error.message : error);
     }
   }

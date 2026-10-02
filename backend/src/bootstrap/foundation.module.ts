@@ -438,7 +438,7 @@ import { TOKENS } from './injection-tokens';
     { provide: 'NOTIFICATION_CHANNEL', useFactory: () => new UnconfiguredChannelAdapter(), inject: [] },
     { provide: RecordNotification, useFactory: (repository: NotificationRepository, clock) => new RecordNotification({ repository, clock }), inject: ['NOTIFICATION_REPOSITORY', TOKENS.Clock] },
     { provide: DriveDeliveries, useFactory: (repository: NotificationRepository, channel, clock) => new DriveDeliveries({ repository, channels: [channel], clock }), inject: ['NOTIFICATION_REPOSITORY', 'NOTIFICATION_CHANNEL', TOKENS.Clock] },
-    { provide: RetryDelivery, useFactory: (repository: NotificationRepository, audit, clock) => new RetryDelivery({ repository, audit, clock }), inject: ['NOTIFICATION_REPOSITORY', RecordOperation, TOKENS.Clock] },
+    { provide: RetryDelivery, useFactory: (repository: NotificationRepository, audit, clock, pool: Pool) => new RetryDelivery({ repository, audit, clock, runner: new PostgresTransactionRunner(pool) }), inject: ['NOTIFICATION_REPOSITORY', RecordOperation, TOKENS.Clock, TOKENS.PgPool] },
     { provide: ScanTimeoutConversations, useFactory: (scanPort, recorder, clock) => new ScanTimeoutConversations({ scanPort, recorder, clock, thresholdMinutes: readConfig().csFirstResponseTimeoutMinutes }), inject: ['NOTIFICATION_SCAN_PORT', RecordNotification, TOKENS.Clock] },
     { provide: CatchUpBusinessEvents, useFactory: (scanPort, recorder) => new CatchUpBusinessEvents({ scanPort, recorder }), inject: ['NOTIFICATION_SCAN_PORT', RecordNotification] },
     // 审计查询（T009/F039）：admin_operation_logs 只读投影
