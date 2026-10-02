@@ -1,0 +1,9 @@
+# F042-wechat-identity-simulator 登录与手机号模拟
+
+- 编号：F042；目标：登录与手机号模拟。
+- 主领域：IdentityAccess / Payments；协作领域：任务所列上下文。
+- 负责 Agent：Codex；修改目录：infra/simulation、scripts/simulation、tests/task-suites/t010；前置：T009。
+- 当前状态：已规划；阻塞项：无本地范围阻塞。
+- 所属大任务：[T010-local-wechat-simulation](../../tasks/T010-local-wechat-simulation/README.md)；[整体 spec](../../tasks/T010-local-wechat-simulation/spec.md)、[整体 plan](../../tasks/T010-local-wechat-simulation/plan.md)。
+- 文件索引：ddd.md/spec.md/plan.md；验证时创建 verification.md。
+
