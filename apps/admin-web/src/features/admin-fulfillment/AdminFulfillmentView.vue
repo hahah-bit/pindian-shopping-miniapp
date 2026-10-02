@@ -279,7 +279,7 @@ onMounted(() => load(1));
 
       <button type="button" class="primary" :disabled="shipping" @click="confirmShip">{{ shipping ? '提交中…' : '确认发货' }}</button>
     </div>
-    <p class="hint">非补发发货计入进度：Σ数量 = 分配数量即全部发货；补发仅记录轨迹，不改变进度。运单号全局唯一。数量单位按商品：重量商品为**克**、计数商品为**{{ shipTarget.unit }}**（件数）。</p>
+    <p class="hint">非补发发货计入进度：Σ数量 = 分配数量即全部发货；补发仅记录轨迹，不改变进度。运单号全局唯一。重量商品按克填写；计数商品按商品计数单位填写。</p>
   </div>
 
   <div v-if="receiverTarget" class="detail-panel">

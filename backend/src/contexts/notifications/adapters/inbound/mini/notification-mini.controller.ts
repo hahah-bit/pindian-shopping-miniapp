@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import { Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import type { ApiResponse, MiniNotificationList, NotificationRecordView } from '@pindian/contracts';
 import { ApplicationError } from '../../../../../shared/kernel';
 import type { RequestWithPrincipal } from '../../../../identity-access/adapters/inbound/admin/access.guard';
@@ -43,6 +43,7 @@ export class NotificationMiniController {
   }
 
   @Post(':id/read')
+  @HttpCode(200)
   async markRead(@Param('id') id: string, @Req() request: RequestWithPrincipal): Promise<ApiResponse<{ notification: NotificationRecordView }>> {
     const userId = requireUser(request);
     const found = await this.repository.findUserNotification(id, userId);
