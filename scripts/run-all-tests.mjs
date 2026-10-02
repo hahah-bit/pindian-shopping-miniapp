@@ -16,6 +16,6 @@ if (process.argv[2] && !taskDirs[process.argv[2]]) throw new Error('未知专项
 const directory = taskDirs[process.argv[2]] ?? 'tests';
 const files = await findTests(resolve(directory));
 if (!files.length) throw new Error('没有发现测试，不能视为测试通过');
-const child = spawn(process.execPath, ['--test', ...files], { stdio: 'inherit' });
+const child = spawn(process.execPath, ['--test', '--test-concurrency=4', ...files], { stdio: 'inherit' });
 child.on('error', (error) => { console.error(error.message); process.exitCode = 1; });
 child.on('exit', (code) => { process.exitCode = code ?? 1; });

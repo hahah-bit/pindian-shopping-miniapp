@@ -4,3 +4,4 @@ export function validateReleaseEnvironment(env){
  for(const key of ['RELEASE_IMAGE','ADMIN_RELEASE_IMAGE'])if(!env[key]||env[key].endsWith(':latest')||(!env[key].includes('@sha256:')&&!/:[a-zA-Z0-9][a-zA-Z0-9_.-]+$/.test(env[key])))throw Error('发布镜像必须指定固定版本');
  return env;
 }
+export function rehearsalImageTags(sha){return{api:'pindian-rehearsal-api:'+sha+'-working',admin:'pindian-rehearsal-admin:'+sha+'-working'};}

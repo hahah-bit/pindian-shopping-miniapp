@@ -1,0 +1,2 @@
+export function validateMigrationCompatibility(applied,target){if(!Array.isArray(target?.migrations)||applied.some(name=>!target.migrations.some(m=>m.name===name)))throw Error('目标不包含已应用迁移，禁止降库');return true;}
+export function validateRollback(current,target){if(!current?.applicationDigest||current.applicationDigest!==target?.applicationDigest||JSON.stringify(current.migrations)!==JSON.stringify(target.migrations))throw Error('回退不兼容：恢复历史备份到新项目后验收，禁止原地降级');return true;}

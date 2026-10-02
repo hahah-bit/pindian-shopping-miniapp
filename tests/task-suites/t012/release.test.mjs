@@ -1,0 +1,6 @@
+import test from'node:test';import assert from'node:assert/strict';import{validateRollback,validateMigrationCompatibility}from'../../../scripts/release/release-guards.mjs';
+test('F048 回退不能掩盖schema或应用不兼容',()=>{const current={migrations:[{name:'a.sql',sha256:'a'},{name:'b.sql',sha256:'b'}],applicationDigest:'same'};assert.throws(()=>validateRollback(current,{...current,migrations:current.migrations.slice(0,1)}),/兼容/);assert.throws(()=>validateRollback(current,{...current,applicationDigest:'changed'}),/兼容/);assert.throws(()=>validateMigrationCompatibility(['a.sql','b.sql'],{migrations:current.migrations.slice(0,1)}),/迁移/);assert.equal(validateRollback(current,{...current}),true);});
+
+test('F048 同名迁移内容改变也不能回退',()=>{const current={migrations:[{name:'a.sql',sha256:'old'}],applicationDigest:'same'};assert.throws(()=>validateRollback(current,{...current,migrations:[{name:'a.sql',sha256:'changed'}]}),/兼容/);});
+
+import{rehearsalImageTags}from'../../../scripts/release/guards.mjs';test('F048 工作区镜像不能覆盖封存Git版本标签',()=>{const sha='abcdef123456',tags=rehearsalImageTags(sha);assert.notEqual(tags.api,'pindian-api:'+sha);assert.notEqual(tags.admin,'pindian-admin:'+sha);assert.match(tags.api,/^pindian-rehearsal-api:/);});

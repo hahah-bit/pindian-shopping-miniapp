@@ -6,3 +6,11 @@
 
 验收：发布目标和版本约束采用 TDD；装配后本地演练发布、重启、恢复。真实审核/到账/触达不计入本轮通过。 失败保持明确错误与未完成；既有公共 API、权限与金额单位不变。待决策：无本地实现阻塞；真实环境单列待验。
 
+
+## 发布包/回退契约（实现前）
+package CLI仅从已解析Git提交导出source.tar，独立目录构建API/admin固定镜像，manifest记录提交、源码SHA、迁移名/SQL摘要、应用源码摘要、image ID与基础镜像ID。可导出runtime-images.tar给离线服务器；不打包.env/运行密钥/数据库/未提交T005。
+发布CLI加载清单校验包及本地image ID，生成ignored overlay以image ID启动，记录previous/current和健康结果。数据库不在目标迁移清单内则拒绝迁移前执行；目标新迁移必须先备份，迁移失败不自动降库。回退只允许迁移清单/SQL摘要完全相同且应用源码摘要相同的已演练维护版本，其他变更拒绝，要求恢复历史备份到新项目后切换流量并重新验收，绝不按“旧应用能启动”判回滚。演练使用两个真实Git提交的同应用/同schema版本，发布→重启→回退，并核对业务摘要不变；另验证缺迁移/变更SQL/应用不兼容会被拒绝。
+
+切换镜像前暂停API/Worker，重建后重启admin/gateway刷新上游DNS，再等待整体健康；失败保留failed目标记录与旧版本信息，不自动降数据库。运维脚本读取当前image overlay，备份/健康不静默恢复.env里的旧标签。大镜像包SHA采用分块读取以限制内存。
+
+全量发现并复现：rehearsal:init工作区构建使用生产Git包同标签，可能覆盖封存image ID，造成发布No such image。整改：工作区独立pindian-rehearsal-*命名空间，封存包只从Git快照构建；一键prepare从已校验离线镜像归档load后核对全部image ID。全量新增Docker/多Nest装置后旧HTTP启动8秒超时，runner限制4个测试文件并发，测试/断言/专项筛选不变。
