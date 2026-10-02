@@ -1,0 +1,8 @@
+# 必须使用独立项目名 pindian-simulation 和 .env.simulation，不与主库合用。
+services:
+  api:
+    environment:
+      APP_ENV: simulation
+  worker:
+    environment:
+      APP_ENV: simulation

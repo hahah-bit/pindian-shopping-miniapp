@@ -1,4 +1,17 @@
 name: pindian-platform
+x-wechat-env: &wechat-env
+  APP_ENV: ${APP_ENV:-local}
+  WX_APPID: ${WX_APPID:-}
+  WX_APP_SECRET: ${WX_APP_SECRET:-}
+  WX_API_BASE_URL: ${WX_API_BASE_URL:-}
+  WX_PAY_MCHID: ${WX_PAY_MCHID:-}
+  WX_PAY_APIV3_KEY: ${WX_PAY_APIV3_KEY:-}
+  WX_PAY_SERIAL_NO: ${WX_PAY_SERIAL_NO:-}
+  WX_PAY_PRIVATE_KEY_PATH: ${WX_PAY_PRIVATE_KEY_PATH:-}
+  WX_PAY_PLATFORM_PUBLIC_KEY_PATH: ${WX_PAY_PLATFORM_PUBLIC_KEY_PATH:-}
+  WX_PAY_NOTIFY_URL: ${WX_PAY_NOTIFY_URL:-http://localhost:3000/api/payments/v1/notify}
+  WX_PAY_ENDPOINT_BASE: ${WX_PAY_ENDPOINT_BASE:-}
+  CS_FIRST_RESPONSE_TIMEOUT_MINUTES: ${CS_FIRST_RESPONSE_TIMEOUT_MINUTES:-15}
 services:
   postgres:
     image: postgres:17-alpine
@@ -21,6 +34,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
+      <<: *wechat-env
       PORT: "3000"
       DATABASE_URL: postgresql://${POSTGRES_USER:-pindian}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pindian}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
@@ -29,6 +43,7 @@ services:
       ADMIN_SESSION_TTL_MINUTES: ${ADMIN_SESSION_TTL_MINUTES:-720}
     volumes:
       - media-data:/var/lib/pindian/media
+      - ./data/simulation/keys:/run/wechat:ro
     ports:
       - "127.0.0.1:${API_PORT:-3000}:3000"
     depends_on:
@@ -48,7 +63,12 @@ services:
       dockerfile: backend/Dockerfile
     command: ["node", "backend/dist/bootstrap/worker.js"]
     environment:
+      <<: *wechat-env
       DATABASE_URL: postgresql://${POSTGRES_USER:-pindian}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pindian}
+      PUBLIC_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://127.0.0.1:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+    volumes:
+      - ./data/simulation/keys:/run/wechat:ro
     depends_on:
       postgres:
         condition: service_healthy

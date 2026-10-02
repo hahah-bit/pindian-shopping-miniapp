@@ -1,4 +1,8 @@
+import { existsSync } from 'node:fs';
+
 export interface RuntimeConfig {
+  appEnv: 'local' | 'simulation' | 'production';
+  wxApiBaseUrl: string | null;
   port: number;
   databaseUrl: string;
   corsOrigins: string[];
@@ -29,6 +33,19 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 }
 
 export function readConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig {
+  const appEnv = env.APP_ENV ?? 'local';
+  if (!['local', 'simulation', 'production'].includes(appEnv)) throw new Error('APP_ENV 必须是 local、simulation 或 production');
+  if (appEnv === 'production') {
+    if (env.WX_API_BASE_URL || env.WX_PAY_ENDPOINT_BASE || env.SIMULATION_CONTROL_TOKEN) throw new Error('生产环境禁止模拟渠道与端点覆盖');
+    const required = ['WX_APPID','WX_APP_SECRET','WX_PAY_MCHID','WX_PAY_APIV3_KEY','WX_PAY_SERIAL_NO','WX_PAY_PRIVATE_KEY_PATH','WX_PAY_PLATFORM_PUBLIC_KEY_PATH','WX_PAY_NOTIFY_URL','PUBLIC_API_BASE_URL','CORS_ORIGINS'];
+    if (required.some((key) => !env[key]?.trim())) throw new Error('生产环境必须完整配置微信、回调、域名和密钥');
+    if (env.WX_PAY_APIV3_KEY?.length !== 32) throw new Error('生产 APIv3 密钥长度不正确');
+    for (const key of ['WX_PAY_PRIVATE_KEY_PATH','WX_PAY_PLATFORM_PUBLIC_KEY_PATH']) if (!existsSync(env[key]!)) throw new Error('生产密钥文件不可读');
+    for (const value of [env.PUBLIC_API_BASE_URL!, env.WX_PAY_NOTIFY_URL!, ...env.CORS_ORIGINS!.split(',')]) {
+      let url: URL; try { url = new URL(value.trim()); } catch { throw new Error('生产域名配置无效'); }
+      if (url.protocol !== 'https:' || ['localhost','127.0.0.1','0.0.0.0'].includes(url.hostname)) throw new Error('生产域名和回调必须使用 HTTPS 公网域名');
+    }
+  }
   const port = Number(env.PORT ?? env.API_PORT ?? '3000');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT 必须为有效端口');
   if (!env.DATABASE_URL) throw new Error('必须设置 DATABASE_URL');
@@ -51,6 +68,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig 
     publicApiBaseUrl = parsed.origin;
   } catch { throw new Error('PUBLIC_API_BASE_URL 必须为 HTTP(S) origin'); }
   return {
+    appEnv: appEnv as RuntimeConfig['appEnv'],
+    wxApiBaseUrl: env.WX_API_BASE_URL?.trim() || null,
     port,
     databaseUrl: env.DATABASE_URL,
     corsOrigins,

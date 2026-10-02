@@ -9,3 +9,5 @@ coverage/
 apps/mini-program/project.private.config.json
 .DS_Store
 backup/
+data/simulation/
+data/release/

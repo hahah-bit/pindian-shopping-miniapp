@@ -3,7 +3,6 @@ import { WxCodeInvalidError, WxNotConfiguredError, WxPhoneInfo, WxRiskBlockedErr
 import type { RuntimeConfig } from '../../../../../bootstrap/config';
 
 // 测试装置可覆盖（WX_API_BASE_URL 指向本地假微信服务）；生产默认官方端点。
-const WX_API_BASE = process.env.WX_API_BASE_URL?.trim() || 'https://api.weixin.qq.com';
 
 interface WxErrorResponse {
   errcode?: number;
@@ -42,7 +41,7 @@ export class HttpWxAuthAdapter implements WxAuthPort {
 
   async exchangeCodeForSession(code: string): Promise<WxSessionInfo> {
     if (!this.configured) throw new WxNotConfiguredError();
-    const url = `${WX_API_BASE}/sns/jscode2session?appid=${encodeURIComponent(this.config.wxAppid!)}&secret=${encodeURIComponent(this.config.wxAppSecret!)}&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`;
+    const url = `${this.config.wxApiBaseUrl ?? 'https://api.weixin.qq.com'}/sns/jscode2session?appid=${encodeURIComponent(this.config.wxAppid!)}&secret=${encodeURIComponent(this.config.wxAppSecret!)}&js_code=${encodeURIComponent(code)}&grant_type=authorization_code`;
     const body = await fetchJson(url);
     const errcode = body.errcode as number | undefined;
     if (errcode !== undefined && errcode !== 0) mapLoginError(errcode, String(body.errmsg ?? ''));
@@ -57,6 +56,7 @@ export class HttpWxAuthAdapter implements WxAuthPort {
  * 注意：stable_token 与旧 getAccessToken 相互隔离，混用会导致对方失效——本项目统一只用 stable_token。
  */
 export class HttpWxAccessTokenAdapter {
+  get apiBaseUrl(): string { return this.config.wxApiBaseUrl ?? 'https://api.weixin.qq.com'; }
   private cached: { token: string; expiresAt: number } | null = null;
   private inflight: Promise<string> | null = null;
 
@@ -72,7 +72,7 @@ export class HttpWxAccessTokenAdapter {
     if (!forceRefresh && this.cached && this.cached.expiresAt > now + 5 * 60_000) return this.cached.token;
     if (!forceRefresh && this.inflight) return this.inflight;
     const request = (async () => {
-      const body = await fetchJson(`${WX_API_BASE}/cgi-bin/stable_token`, {
+      const body = await fetchJson(`${this.config.wxApiBaseUrl ?? 'https://api.weixin.qq.com'}/cgi-bin/stable_token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grant_type: 'client_credential', appid: this.config.wxAppid, secret: this.config.wxAppSecret, force_refresh: forceRefresh })
@@ -96,7 +96,7 @@ export class HttpWxPhoneAdapter implements WxPhonePort {
 
   async exchangePhoneNumberCode(code: string, openid: string | null): Promise<WxPhoneInfo> {
     const token = await this.tokens.getToken();
-    const body = await fetchJson(`${WX_API_BASE}/wxa/business/getuserphonenumber?access_token=${encodeURIComponent(token)}`, {
+    const body = await fetchJson(`${this.tokens.apiBaseUrl}/wxa/business/getuserphonenumber?access_token=${encodeURIComponent(token)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code, ...(openid ? { openid } : {}) })
