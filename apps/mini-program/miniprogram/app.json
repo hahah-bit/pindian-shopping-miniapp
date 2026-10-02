@@ -6,7 +6,9 @@
     "features/catalog/pages/detail/index",
     "features/address/pages/list/index",
     "features/address/pages/form/index",
-    "features/orders/pages/detail/index"
+    "features/orders/pages/detail/index",
+    "features/cs/pages/chat/chat",
+    "features/cs/pages/index/index"
   ],
   "window": {
     "navigationBarTitleText": "拼单购物",

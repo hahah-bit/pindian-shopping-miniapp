@@ -261,3 +261,17 @@ export async function updateFulfillmentReceiver(id: string, body: { receiverName
 export function exportShipmentsCsv(groupId: string): string {
   return `/api/admin/v1/fulfillment/groups/${groupId}/shipments/export`;
 }
+
+// ---------- 客服工作台（T008） ----------
+
+export async function listCsQueue(): Promise<{ items: Array<{ id: string; status: string; hasAgent: boolean }> }> {
+  return request('/api/admin/v1/cs/queue');
+}
+
+export async function listCsConversations(status: string): Promise<{ items: Array<{ id: string; status: string; hasAgent: boolean }> }> {
+  return request(`/api/admin/v1/cs/conversations?status=${encodeURIComponent(status)}`);
+}
+
+export async function acceptCsConversation(id: string): Promise<{ conversation: { id: string; status: string; hasAgent: boolean } }> {
+  return request(`/api/admin/v1/cs/conversations/${id}/accept`, { method: 'POST', body: '{}' });
+}

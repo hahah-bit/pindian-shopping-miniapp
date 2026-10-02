@@ -1,0 +1,31 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="state">正在加载…</view>
+  <view wx:elif="{{error}}" class="state error-state">
+    <text>{{error}}</text>
+    <button bindtap="retry" type="button">重试</button>
+  </view>
+  <block wx:else>
+    <view class="card">
+      <view class="section-title">在线客服</view>
+      <block wx:if="{{conversation}}">
+        <view class="conv-status">当前会话：{{conversation.hasAgent ? '客服接待中' : '等待客服接入（当前为留言）'}}</view>
+        <button class="primary-btn" bindtap="openChat" data-id="{{conversation.id}}">继续会话</button>
+      </block>
+      <block wx:else>
+        <view class="hint">有问题？联系在线客服，支持文字、图片与订单/商品卡片。</view>
+        <button class="primary-btn" bindtap="startChat" loading="{{submitting}}" disabled="{{submitting}}">发起咨询</button>
+      </block>
+    </view>
+
+    <view class="card">
+      <view class="section-title">我的售后工单</view>
+      <view wx:if="{{!tickets.length}}" class="hint">暂无工单。</view>
+      <view wx:for="{{tickets}}" wx:key="id" class="ticket-row">
+        <view>
+          <view class="ticket-title">{{item.title}}</view>
+          <view class="ticket-meta">{{item.typeText}} · {{item.statusText}}</view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

@@ -1,0 +1,23 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="state">正在加载会话…</view>
+  <view wx:elif="{{error}}" class="state error-state">
+    <text>{{error}}</text>
+    <button bindtap="retry" type="button">重试</button>
+  </view>
+  <block wx:else>
+    <view class="status-bar">
+      <text>{{status === 'queued' ? '等待客服接入（当前为留言）' : status === 'active' ? (hasAgent ? '客服接待中' : '等待接入') : '会话已结束'}}</text>
+      <text wx:if="{{status === 'queued' || status === 'active'}}" class="end-link" bindtap="endSession">结束会话</text>
+    </view>
+    <scroll-view class="messages" scroll-y scroll-into-view="{{scrollInto}}">
+      <view wx:for="{{messages}}" wx:key="seq" id="msg-{{item.seq}}" class="msg-row {{item.self ? 'self' : 'other'}}">
+        <view class="bubble {{item.self ? 'self' : 'other'}}">{{item.text}}</view>
+        <view class="time">{{item.timeText}}</view>
+      </view>
+    </scroll-view>
+    <view class="composer">
+      <input value="{{input}}" bindinput="onInput" placeholder="输入消息…" confirm-type="send" bindconfirm="send" disabled="{{status !== 'queued' && status !== 'active'}}" />
+      <button bindtap="send" loading="{{sending}}" disabled="{{sending || !input}}">发送</button>
+    </view>
+  </block>
+</view>
