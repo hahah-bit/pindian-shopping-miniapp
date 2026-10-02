@@ -1,0 +1,39 @@
+<view class="page">
+  <view wx:if="{{isMock}}" class="source-banner">Mock 数据预览（platform/config.ts 可切换 api）</view>
+
+  <view wx:if="{{loading && !items.length}}" class="state">正在加载消息…</view>
+
+  <view wx:elif="{{error && !items.length}}" class="state error-state">
+    <text>{{error}}</text>
+    <button bindtap="retry" type="button">重试</button>
+  </view>
+
+  <view wx:elif="{{!items.length}}" class="state">
+    <text>暂无消息</text>
+    <text class="hint">拼单成功、退款到账等通知会在这里出现</text>
+  </view>
+
+  <block wx:else>
+    <view
+      wx:for="{{items}}"
+      wx:key="id"
+      class="card notice-card {{item.readAt ? 'read' : 'unread'}}"
+      hover-class="hover"
+      data-index="{{index}}"
+      bindtap="onTapNotice"
+    >
+      <view class="notice-head">
+        <view class="notice-title">
+          <view wx:if="{{!item.readAt}}" class="dot"></view>
+          <text>{{item.title}}</text>
+        </view>
+        <text class="notice-time">{{item.createdAtText}}</text>
+      </view>
+      <view class="notice-body">{{item.body}}</view>
+    </view>
+    <view wx:if="{{canLoadMore}}" class="state">
+      <button bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
+    </view>
+    <view wx:if="{{error}}" class="error-text">{{error}}</view>
+  </block>
+</view>

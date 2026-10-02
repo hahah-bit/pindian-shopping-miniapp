@@ -58,7 +58,11 @@ export type AdminPermission =
   | 'user:manage'
   | 'order:manage'
   | 'agent:manage'
-  | 'agent:supervise';
+  | 'agent:supervise'
+  | 'reporting:view'
+  | 'reporting:view_cs'
+  | 'audit:view'
+  | 'notification:manage';
 
 export interface AdminProfile {
   id: string;
@@ -492,4 +496,128 @@ export interface AdminFulfillmentDetail {
   status: FulfillmentStatus;
   receiver: { name: string; phoneMasked: string; province: string; city: string; district: string; detail: string; version: number };
   shipments: AdminShipmentView[];
+}
+
+// ---------- 运营看板（T009/F037，口径见 T009 spec §2 / D024） ----------
+
+/** 总览指标（需求 §8.1；金额整数分；null=无样本）。 */
+export interface ReportingOverviewMetrics {
+  totalProducts: number;
+  onShelfProducts: number;
+  openGroups: number;
+  successGroups: number;
+  failedGroups: number;
+  todayOrders: number;
+  todayPaidAmountFen: number;
+  serviceFeeIncomeFen: number;
+  pendingRefundAmountFen: number;
+  pendingShipmentCount: number;
+  csPendingCount: number;
+  /** 退款三态：申请 / 已受理（渠道处理中）/ 已到账。 */
+  refundRequestedFen: number;
+  refundAcceptedFen: number;
+  refundSucceededFen: number;
+}
+
+/** 商品数据（需求 §8.2）。 */
+export interface ReportingProductMetrics {
+  stockWholeItems: number;
+  createdGroups: number;
+  successGroups: number;
+  openGroups: number;
+  paidUserCount: number;
+  successRate: number | null;
+  avgGroupDurationMinutes: number | null;
+  goodsAmountFen: number;
+  serviceFeeAmountFen: number;
+  refundedAmountFen: number;
+}
+
+/** 客服数据（需求 §8.3 + D022 超时计数）。 */
+export interface ReportingCsMetrics {
+  todayConsultUsers: number;
+  queuedCount: number;
+  onlineAgentCount: number;
+  avgFirstResponseMinutes: number | null;
+  avgSessionDurationMinutes: number | null;
+  unhandledCount: number;
+  ticketCount: number;
+  ticketResolveRate: number | null;
+  ticketTypeStats: Array<{ type: string; count: number }>;
+  agentLoad: Array<{ agentId: string; displayName: string; conversations: number }>;
+  overdueFirstResponseCount: number;
+}
+
+export interface ReportingOverviewResult {
+  date: string;
+  generatedAt: string;
+  overview: ReportingOverviewMetrics;
+  product: ReportingProductMetrics;
+}
+
+export interface ReportingCsResult {
+  date: string;
+  generatedAt: string;
+  cs: ReportingCsMetrics;
+}
+
+// ---------- 通知（T009/F038/F040，D021/D022/D023） ----------
+
+export type DeliveryStatus = 'pending' | 'sent' | 'skipped' | 'failed';
+
+/** 管理端投递记录行（接收者名称脱敏展示）。 */
+export interface AdminDeliveryListItem {
+  id: string;
+  notificationId: string;
+  eventType: string;
+  title: string;
+  recipientType: 'admin' | 'user';
+  recipientName: string;
+  channel: string;
+  status: DeliveryStatus;
+  attemptCount: number;
+  maxAttempts: number;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  sentAt: string | null;
+  skippedReason: string | null;
+  createdAt: string;
+}
+
+/** 小程序消息中心通知（仅本人）。 */
+export interface NotificationRecordView {
+  id: string;
+  eventType: string;
+  title: string;
+  body: string;
+  reference: Record<string, unknown>;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface MiniNotificationList {
+  items: NotificationRecordView[];
+  page: number;
+  pageSize: number;
+  total: number;
+  unreadCount: number;
+}
+
+// ---------- 审计与权限矩阵（T009/F039，D025） ----------
+
+/** 操作日志查询行（detail 已脱敏）。 */
+export interface AdminAuditLogItem {
+  id: string;
+  adminId: string | null;
+  adminDisplayName: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  detail: Record<string, unknown>;
+  requestId: string | null;
+  createdAt: string;
+}
+
+export interface RolePermissionMatrix {
+  roles: Array<{ role: AdminRole; label: string; permissions: AdminPermission[] }>;
 }

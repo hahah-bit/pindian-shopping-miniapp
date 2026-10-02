@@ -11,7 +11,7 @@ export const contexts: ContextSummary[] = [
   { key: 'identity-access', name: '身份权限', description: '后台管理员与会话权限（用户身份属后续任务）', status: 'partial' },
   { key: 'customer-service', name: '自建客服', description: '实时会话、离线留言和分配', status: 'planned' },
   { key: 'after-sales', name: '售后工单', description: '工单及售后流程协调', status: 'planned' },
-  { key: 'notifications', name: '通知', description: '可靠投递与投递记录', status: 'planned' },
-  { key: 'audit', name: '操作审计', description: '后台操作日志（T002 已实现基础记录）', status: 'partial' },
-  { key: 'reporting', name: '基础看板', description: '业务事实的统计投影', status: 'planned' }
+  { key: 'notifications', name: '通知', description: '通知记录、投递管道与超时提醒（T009 已实现，外发渠道待凭证）', status: 'partial' },
+  { key: 'audit', name: '操作审计', description: '后台操作日志记录与只读查询（T002 记录 / T009 查询）', status: 'partial' },
+  { key: 'reporting', name: '基础看板', description: '总览/商品/客服指标统计投影（T009 已实现）', status: 'partial' }
 ];

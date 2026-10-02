@@ -51,10 +51,10 @@ test('真实 HTTP：存活、数据库不可达、契约、错误及请求 ID', 
     const info = (await response.json()).data;
     assert.equal(info.businessReady, false);
     assert.equal(info.contexts.length, 12);
-    // T002 起 catalog/identity-access/inventory/audit 已部分实现（partial）；其余仍为 planned。
+    // T002 起 catalog/identity-access/inventory/audit 已部分实现（partial）；T009 起 audit 查询与 reporting/notifications 落地（partial）；其余仍为 planned。
     assert.ok(info.contexts.every((item) => item.status === 'planned' || item.status === 'partial'));
     const partial = info.contexts.filter((item) => item.status === 'partial').map((item) => item.key).sort();
-    assert.deepEqual(partial, ['audit', 'catalog', 'identity-access', 'inventory']);
+    assert.deepEqual(partial, ['audit', 'catalog', 'identity-access', 'inventory', 'notifications', 'reporting']);
   }
   const openapi = await fetch(`${base}/api/health/openapi`);
   assert.equal(openapi.status, 200);

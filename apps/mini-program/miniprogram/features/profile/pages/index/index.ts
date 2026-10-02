@@ -7,6 +7,7 @@ import {
   UserAuthExpiredError
 } from '../../../../platform/user-auth';
 import { apiConfig } from '../../../../platform/config';
+import { fetchUnreadCount } from '../../../../platform/notification-api';
 import type { MiniUserView } from '@pindian/contracts';
 
 Page({
@@ -20,7 +21,8 @@ Page({
     editingNickname: false,
     nicknameInput: '',
     savingNickname: false,
-    bindingPhone: false
+    bindingPhone: false,
+    unreadCount: 0
   },
 
   onShow() {
@@ -31,7 +33,8 @@ Page({
     this.setData({ loading: true, error: '' });
     try {
       const user = await fetchCurrentUser();
-      this.setData({ user });
+      const unreadCount = await fetchUnreadCount();
+      this.setData({ user, unreadCount });
     } catch (cause) {
       this.setData({ error: cause instanceof Error ? cause.message : '加载失败' });
     } finally {
@@ -52,6 +55,10 @@ Page({
     } finally {
       this.setData({ loggingIn: false });
     }
+  },
+
+  openNotifications() {
+    wx.navigateTo({ url: '/features/notifications/pages/index/index' });
   },
 
   startEditNickname() {

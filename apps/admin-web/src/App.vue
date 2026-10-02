@@ -13,6 +13,9 @@ import AdminPayRefundView from './features/admin-payrefund/AdminPayRefundView.vu
 import AdminFulfillmentView from './features/admin-fulfillment/AdminFulfillmentView.vue';
 import AdminCsView from './features/admin-cs/AdminCsView.vue';
 import AdminTicketsView from './features/after-sales/AdminTicketsView.vue';
+import ReportingDashboardView from './features/reporting-dashboard/ReportingDashboardView.vue';
+import AccessAuditView from './features/access-audit/AccessAuditView.vue';
+import AdminNotificationsView from './features/admin-notifications/AdminNotificationsView.vue';
 import { currentPath, navigate } from './platform/router';
 import { ApiClientError, fetchMe, logout, storedToken, storeToken } from './platform/api-client';
 
@@ -26,6 +29,7 @@ const navigation = [
   { key: 'customer-service', label: '客服工作台', path: '/customer-service' },
   { key: 'after-sales', label: '售后工单', path: '/after-sales' },
   { key: 'reporting', label: '运营看板', path: '/reporting' },
+  { key: 'notifications', label: '通知投递', path: '/notifications' },
   { key: 'users', label: '用户管理', path: '/users' },
   { key: 'access', label: '权限与审计', path: '/access' }
 ];
@@ -129,6 +133,9 @@ onMounted(restoreSession);
         <AdminFulfillmentView v-else-if="currentPath === '/fulfillment'" />
         <AdminCsView v-else-if="currentPath === '/customer-service'" :principal="admin" />
         <AdminTicketsView v-else-if="currentPath === '/after-sales'" :principal="admin" />
+        <ReportingDashboardView v-else-if="currentPath === '/reporting'" :principal="admin" />
+        <AdminNotificationsView v-else-if="currentPath === '/notifications'" />
+        <AccessAuditView v-else-if="currentPath === '/access'" />
         <ModulePlaceholder v-else :title="title" />
       </section>
     </main>

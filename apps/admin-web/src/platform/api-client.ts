@@ -1,4 +1,4 @@
-import type { AdminGroupListItem, AdminOrderListItem, AdminPhoneReveal, AdminUserListItem, AdminProductListItem, AdminProductView, ApiResponse, CreateProductRequest, LoginResponse, MediaAssetAdminView, MediaAssetView, MiniProductListItem, MiniProductView, PageView, PlatformInfo, StockAdjustmentRequest, StockAdjustmentResult, StockMovementView, StockView, UpdateProductRequest, AdminPaymentListItem, AdminRefundListItem, PaymentAnomaliesView, AdminFulfillmentGroupSummary, AdminFulfillmentDetail } from '@pindian/contracts';
+import type { AdminGroupListItem, AdminOrderListItem, AdminPhoneReveal, AdminUserListItem, AdminProductListItem, AdminProductView, ApiResponse, CreateProductRequest, LoginResponse, MediaAssetAdminView, MediaAssetView, MiniProductListItem, MiniProductView, PageView, PlatformInfo, StockAdjustmentRequest, StockAdjustmentResult, StockMovementView, StockView, UpdateProductRequest, AdminPaymentListItem, AdminRefundListItem, PaymentAnomaliesView, AdminFulfillmentGroupSummary, AdminFulfillmentDetail, ReportingOverviewResult, ReportingCsResult, AdminDeliveryListItem, AdminAuditLogItem, RolePermissionMatrix } from '@pindian/contracts';
 
 /** 结构化 API 错误：携带后端错误码与原因清单。 */
 export class ApiClientError extends Error {
@@ -274,4 +274,48 @@ export async function listCsConversations(status: string): Promise<{ items: Arra
 
 export async function acceptCsConversation(id: string): Promise<{ conversation: { id: string; status: string; hasAgent: boolean } }> {
   return request(`/api/admin/v1/cs/conversations/${id}/accept`, { method: 'POST', body: '{}' });
+}
+
+// ---------- 运营看板（T009/F037） ----------
+
+export async function getReportingOverview(date?: string): Promise<ReportingOverviewResult> {
+  const query = date ? `?date=${encodeURIComponent(date)}` : '';
+  return request<ReportingOverviewResult>(`/api/admin/v1/reporting/overview${query}`);
+}
+
+export async function getReportingCs(date?: string): Promise<ReportingCsResult> {
+  const query = date ? `?date=${encodeURIComponent(date)}` : '';
+  return request<ReportingCsResult>(`/api/admin/v1/reporting/customer-service${query}`);
+}
+
+// ---------- 通知投递（T009/F038/F040） ----------
+
+export async function listNotificationDeliveries(query: { status?: string; eventType?: string; page?: number; pageSize?: number } = {}): Promise<{ items: AdminDeliveryListItem[]; page: number; pageSize: number; total: number }> {
+  const params = new URLSearchParams();
+  if (query.status) params.set('status', query.status);
+  if (query.eventType) params.set('eventType', query.eventType);
+  params.set('page', String(query.page ?? 1));
+  params.set('pageSize', String(query.pageSize ?? 10));
+  return request(`/api/admin/v1/notifications/deliveries?${params.toString()}`);
+}
+
+export async function retryNotificationDelivery(id: string): Promise<{ delivery: AdminDeliveryListItem }> {
+  return request(`/api/admin/v1/notifications/deliveries/${id}/retry`, { method: 'POST', body: '{}' });
+}
+
+// ---------- 审计与权限矩阵（T009/F039） ----------
+
+export async function listAuditLogs(query: { adminId?: string; action?: string; resourceType?: string; from?: string; to?: string; page?: number; pageSize?: number } = {}): Promise<{ items: AdminAuditLogItem[]; page: number; pageSize: number; total: number }> {
+  const params = new URLSearchParams();
+  for (const key of ['adminId', 'action', 'resourceType', 'from', 'to'] as const) {
+    const value = query[key];
+    if (value) params.set(key, value);
+  }
+  params.set('page', String(query.page ?? 1));
+  params.set('pageSize', String(query.pageSize ?? 10));
+  return request(`/api/admin/v1/audit/logs?${params.toString()}`);
+}
+
+export async function getRoleMatrix(): Promise<RolePermissionMatrix> {
+  return request<RolePermissionMatrix>('/api/admin/v1/access/role-matrix');
 }

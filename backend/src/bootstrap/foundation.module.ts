@@ -136,6 +136,23 @@ import { MiniCsController, AdminCsController } from '../contexts/customer-servic
 import { MiniCardController } from '../contexts/customer-service/adapters/inbound/mini-card.controller';
 import { ApplicationError } from '../shared/kernel';
 import { AdminPayRefundQueries } from '../contexts/payments/application/admin-pay-refund-queries';
+import { ReportingController } from '../contexts/reporting/adapters/inbound/admin/reporting.controller';
+import { ReportingQueries, type ReportingReadModel } from '../contexts/reporting/application/reporting-queries';
+import { PostgresReportingReadModel } from '../contexts/reporting/adapters/outbound/postgres/reporting-read-model';
+import { NotificationAdminController } from '../contexts/notifications/adapters/inbound/admin/notification-admin.controller';
+import { AuditController } from '../contexts/audit/adapters/inbound/admin/audit.controller';
+import { AuditLogQueries } from '../contexts/audit/application/audit-queries';
+import { PostgresOperationLogQuery } from '../contexts/audit/adapters/outbound/postgres/operation-log-query';
+import { NotificationMiniController } from '../contexts/notifications/adapters/inbound/mini/notification-mini.controller';
+import { PostgresNotificationRepository } from '../contexts/notifications/adapters/outbound/postgres/notification-repository';
+import { PostgresNotificationScanPort } from '../contexts/notifications/adapters/outbound/postgres/scan-ports';
+import { UnconfiguredChannelAdapter } from '../contexts/notifications/adapters/outbound/channel/unconfigured-channel';
+import { RecordNotification } from '../contexts/notifications/application/record-notification';
+import { DriveDeliveries } from '../contexts/notifications/application/delivery-driver';
+import { RetryDelivery } from '../contexts/notifications/application/retry-delivery';
+import { ScanTimeoutConversations } from '../contexts/notifications/application/timeout-reminder';
+import { CatchUpBusinessEvents } from '../contexts/notifications/application/event-catchup';
+import type { NotificationRepository } from '../contexts/notifications/application/ports';
 import { contexts } from './context-registry';
 import { readConfig } from './config';
 import type { RuntimeConfig } from './config';
@@ -169,6 +186,10 @@ import { TOKENS } from './injection-tokens';
     MiniCardController,
     ChatMediaController,
     CsAccountsController,
+    ReportingController,
+    NotificationAdminController,
+    NotificationMiniController,
+    AuditController,
   ],
   providers: [
     { provide: TOKENS.PgPool, useFactory: () => new Pool({ connectionString: readConfig().databaseUrl, max: 10 }) },
@@ -404,6 +425,24 @@ import { TOKENS } from './injection-tokens';
       }), inject: [TOKENS.ProductRepository, 'ORDER_REPOSITORY', 'GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'PAYMENT_REPOSITORY', 'REFUND_REPOSITORY'] },
     {provide:CardProjectionUseCase,useFactory:deps=>new CardProjectionUseCase(deps),inject:['CARD_PROJECTION_DEPS']},
     { provide: 'ADMIN_CS_DEPS', useFactory: (accept, transfer, end, append, list, repo, convertTicket, tickets, process, heartbeat, cards) => ({ accept, transfer, end, append, list, conversations: repo, convertTicket, tickets, process, heartbeat, cards }), inject: [AcceptConversationUseCase, TransferConversationUseCase, EndConversationUseCase, AppendMessageUseCase, ListMessagesUseCase, 'CS_CONVERSATION_REPOSITORY', ConvertConversationToTicketUseCase, 'AFTER_SALES_TICKET_REPOSITORY', ProcessTicketUseCase, AgentHeartbeatUseCase, CardProjectionUseCase] },
+    // 运营看板（T009/F037）：只读统计投影
+    { provide: 'REPORTING_READ_MODEL', useFactory: (pool: Pool) => new PostgresReportingReadModel(pool), inject: [TOKENS.PgPool] },
+    {
+      provide: 'REPORTING_QUERIES',
+      useFactory: (readModel: ReportingReadModel, clock) => new ReportingQueries({ readModel, clock, overdueThresholdMinutes: readConfig().csFirstResponseTimeoutMinutes }),
+      inject: ['REPORTING_READ_MODEL', TOKENS.Clock]
+    },
+    // 通知（T009/F038，D021/D022/D026）：渠道端口本轮为未配置适配器，真实订阅消息待凭证另接
+    { provide: 'NOTIFICATION_REPOSITORY', useFactory: (pool: Pool) => new PostgresNotificationRepository(pool), inject: [TOKENS.PgPool] },
+    { provide: 'NOTIFICATION_SCAN_PORT', useFactory: (pool: Pool) => new PostgresNotificationScanPort(pool), inject: [TOKENS.PgPool] },
+    { provide: 'NOTIFICATION_CHANNEL', useFactory: () => new UnconfiguredChannelAdapter(), inject: [] },
+    { provide: RecordNotification, useFactory: (repository: NotificationRepository, clock) => new RecordNotification({ repository, clock }), inject: ['NOTIFICATION_REPOSITORY', TOKENS.Clock] },
+    { provide: DriveDeliveries, useFactory: (repository: NotificationRepository, channel, clock) => new DriveDeliveries({ repository, channels: [channel], clock }), inject: ['NOTIFICATION_REPOSITORY', 'NOTIFICATION_CHANNEL', TOKENS.Clock] },
+    { provide: RetryDelivery, useFactory: (repository: NotificationRepository, audit, clock) => new RetryDelivery({ repository, audit, clock }), inject: ['NOTIFICATION_REPOSITORY', RecordOperation, TOKENS.Clock] },
+    { provide: ScanTimeoutConversations, useFactory: (scanPort, recorder, clock) => new ScanTimeoutConversations({ scanPort, recorder, clock, thresholdMinutes: readConfig().csFirstResponseTimeoutMinutes }), inject: ['NOTIFICATION_SCAN_PORT', RecordNotification, TOKENS.Clock] },
+    { provide: CatchUpBusinessEvents, useFactory: (scanPort, recorder) => new CatchUpBusinessEvents({ scanPort, recorder }), inject: ['NOTIFICATION_SCAN_PORT', RecordNotification] },
+    // 审计查询（T009/F039）：admin_operation_logs 只读投影
+    { provide: 'AUDIT_LOG_QUERIES', useFactory: (pool: Pool) => new AuditLogQueries({ queryPort: new PostgresOperationLogQuery(pool) }), inject: [TOKENS.PgPool] },
     // 跨上下文工作流
     {
       provide: CreateProductWorkflow,

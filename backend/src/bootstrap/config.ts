@@ -17,6 +17,8 @@ export interface RuntimeConfig {
   /** 覆盖渠道 API 域名（仅联调/测试注入本地假渠道；默认官方域名）。 */
   wxPayEndpointBase: string | null;
   wxAppSecret: string | null;
+  /** D022 客服首响超时阈值（分钟）：超时提醒任务与看板超时计数共用。 */
+  csFirstResponseTimeoutMinutes: number;
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
@@ -64,6 +66,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): RuntimeConfig 
     wxPayPrivateKeyPath: env.WX_PAY_PRIVATE_KEY_PATH?.trim() || null,
     wxPayPlatformPublicKeyPath: env.WX_PAY_PLATFORM_PUBLIC_KEY_PATH?.trim() || null,
     wxPayNotifyUrl: env.WX_PAY_NOTIFY_URL?.trim() || 'http://localhost:3000/api/payments/v1/notify',
-    wxPayEndpointBase: env.WX_PAY_ENDPOINT_BASE?.trim() || null
+    wxPayEndpointBase: env.WX_PAY_ENDPOINT_BASE?.trim() || null,
+    csFirstResponseTimeoutMinutes: parsePositiveInt(env.CS_FIRST_RESPONSE_TIMEOUT_MINUTES, 15)
   };
 }

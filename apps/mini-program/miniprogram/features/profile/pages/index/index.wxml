@@ -39,6 +39,11 @@
       <view wx:if="{{error}}" class="error-text">{{error}}</view>
     </view>
 
+    <view class="card action-card" hover-class="hover" bindtap="openNotifications">
+      <view class="entry-main"><text>消息中心</text><view wx:if="{{unreadCount > 0}}" class="unread-badge">{{unreadCount > 99 ? '99+' : unreadCount}}</view></view>
+      <text class="arrow">›</text>
+    </view>
+
     <view class="card action-card" hover-class="hover" bindtap="openAddresses">
       <text>收货地址</text><text class="arrow">›</text>
     </view>
