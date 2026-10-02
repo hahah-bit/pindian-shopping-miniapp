@@ -1,5 +1,25 @@
 # 必须使用独立项目名 pindian-simulation 和 .env.simulation，不与主库合用。
 services:
+  simulator:
+    image: node:24-alpine
+    command: [node, /sim/server.mjs]
+    environment:
+      APP_ENV: simulation
+      WX_APPID: ${WX_APPID}
+      WX_APP_SECRET: ${WX_APP_SECRET}
+      SIMULATION_CONTROL_TOKEN: ${SIMULATION_CONTROL_TOKEN}
+    volumes:
+      - ./infra/simulation:/sim:ro
+      - ./data/simulation/keys:/run/wechat:ro
+    ports:
+      - "127.0.0.1:3399:3999"
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3999/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    init: true
+    restart: unless-stopped
   api:
     environment:
       APP_ENV: simulation

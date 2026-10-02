@@ -1,0 +1,20 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {startSimulator} from '../../../infra/simulation/server.mjs';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const {HttpWxAuthAdapter,HttpWxAccessTokenAdapter,HttpWxPhoneAdapter}=require('../../../backend/dist/contexts/identity-access/adapters/outbound/wechat/wx-http.adapters.js');
+test('F042 身份模拟经真实HTTP适配器：一次性、失效、拒绝、故障',async(t)=>{
+ const sim=await startSimulator({appEnv:'simulation',controlToken:'local-control',appid:'simulation-appid',secret:'simulation-secret'});t.after(()=>sim.close());
+ const config={wxAppid:'simulation-appid',wxAppSecret:'simulation-secret',wxApiBaseUrl:sim.baseUrl};
+ const login=new HttpWxAuthAdapter(config),phone=new HttpWxPhoneAdapter(new HttpWxAccessTokenAdapter(config));
+ const issue=async(action,user,scenario='success')=>{const r=await fetch(sim.baseUrl+'/simulation/control',{method:'POST',headers:{Authorization:'Bearer local-control','Content-Type':'application/json'},body:JSON.stringify({action,user,scenario})});assert.equal(r.status,200);return(await r.json()).code;};
+ assert.equal((await fetch(sim.baseUrl+'/simulation/control',{method:'POST',body:'{}'})).status,401);
+ const c=await issue('login-code','alice');assert.equal((await login.exchangeCodeForSession(c)).openid,'sim-alice');await assert.rejects(()=>login.exchangeCodeForSession(c),e=>e.name==='WxCodeInvalidError');
+ for(const s of ['invalid','expired'])await assert.rejects(()=>issue('login-code','bob',s).then(c=>login.exchangeCodeForSession(c)),e=>e.name==='WxCodeInvalidError');
+ await assert.rejects(()=>issue('login-code','bob','down').then(c=>login.exchangeCodeForSession(c)),e=>e.name==='WxUnavailableError');
+ const p=await issue('phone-code','alice');assert.equal((await phone.exchangePhoneNumberCode(p,'sim-alice')).purePhoneNumber,'13800000001');
+ await assert.rejects(()=>phone.exchangePhoneNumberCode(p,'sim-alice'),e=>e.code==='PHONE_CODE_INVALID');
+ for(const s of ['refused','expired'])await assert.rejects(()=>issue('phone-code','alice',s).then(c=>phone.exchangePhoneNumberCode(c,'sim-alice')));
+ await assert.rejects(()=>issue('phone-code','alice','down').then(c=>phone.exchangePhoneNumberCode(c,'sim-alice')),e=>e.name==='WxUnavailableError');
+});
+test('F042 模拟服务禁止生产启动',async()=>{await assert.rejects(()=>startSimulator({appEnv:'production',controlToken:'x'}),/simulation/);});
