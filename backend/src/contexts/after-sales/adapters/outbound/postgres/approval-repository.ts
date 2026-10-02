@@ -1,0 +1,14 @@
+import type{PoolClient}from'pg';import{withExecutor,type PgExecutor}from'../../../../../adapters-shared/pg-client';
+import{ActionRequest,type ActionRequestState}from'../../../domain/action-request';import type{ApprovalRepository}from'../../../application/approval';
+interface Row {id:string;ticket_id:string;order_id:string;requester_id:string;client_request_id:string;kind:ActionRequestState['kind'];status:ActionRequestState['status'];reason:string;payload:Record<string,unknown>;amount_fen:number|null;reviewer_id:string|null;review_reason:string|null;result_id:string|null;created_at:Date;reviewed_at:Date|null}
+function model(r:Row){return ActionRequest.rehydrate({id:r.id,ticketId:r.ticket_id,orderId:r.order_id,requesterId:r.requester_id,clientRequestId:r.client_request_id,kind:r.kind,status:r.status,reason:r.reason,payload:r.payload,amountFen:r.amount_fen,reviewerId:r.reviewer_id,reviewReason:r.review_reason,resultId:r.result_id,createdAt:r.created_at,reviewedAt:r.reviewed_at});}
+export class PostgresApprovalRepository implements ApprovalRepository {
+  constructor(private readonly pool:PgExecutor){}
+  private run<T>(tx:unknown,fn:(c:PoolClient)=>Promise<T>){return withExecutor((tx??this.pool) as PgExecutor,fn);}
+  async lockRequester(id:string,tx:unknown){await this.run(tx,c=>c.query("SELECT pg_advisory_xact_lock(hashtext('after-sales-request:'||$1::text))",[id]));}
+  async findByClientKey(actorId:string,key:string,tx:unknown){return this.run(tx,async c=>{const {rows}=await c.query<Row>('SELECT * FROM after_sales_action_requests WHERE requester_id=$1 AND client_request_id=$2',[actorId,key]);return rows[0]?model(rows[0]):null;});}
+  async findByIdForUpdate(id:string,tx:unknown){return this.run(tx,async c=>{const{rows}=await c.query<Row>('SELECT * FROM after_sales_action_requests WHERE id=$1 FOR UPDATE',[id]);return rows[0]?model(rows[0]):null;});}
+  async insert(request:ActionRequest,tx:unknown){const s=request.state;await this.run(tx,c=>c.query('INSERT INTO after_sales_action_requests(id,ticket_id,order_id,requester_id,client_request_id,kind,status,reason,payload,amount_fen,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',[s.id,s.ticketId,s.orderId,s.requesterId,s.clientRequestId,s.kind,s.status,s.reason,JSON.stringify(s.payload),s.amountFen,s.createdAt]));}
+  async save(request:ActionRequest,tx:unknown){const s=request.state;await this.run(tx,c=>c.query('UPDATE after_sales_action_requests SET status=$2,reviewer_id=$3,review_reason=$4,result_id=$5,reviewed_at=$6 WHERE id=$1',[s.id,s.status,s.reviewerId,s.reviewReason,s.resultId,s.reviewedAt]));}
+  async list(ticketId:string){return this.run(undefined,async c=>{const{rows}=await c.query<Row>('SELECT * FROM after_sales_action_requests WHERE ticket_id=$1 ORDER BY created_at,id',[ticketId]);return rows.map(model);});}
+}

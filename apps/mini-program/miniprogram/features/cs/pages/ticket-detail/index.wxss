@@ -1,0 +1,2 @@
+@import "../index/index.wxss";
+.description{white-space:pre-wrap;margin:24rpx 0}.ticket-row{display:block}textarea{width:100%;padding:20rpx;box-sizing:border-box;background:#f4f6f5}

@@ -1,7 +1,7 @@
 import { ApplicationError } from '../../../shared/kernel';
 
 export type RefundStatus = 'requested' | 'submitted' | 'processing' | 'succeeded' | 'failed';
-export type RefundReason = 'user_cancel' | 'group_failed' | 'late_payment';
+export type RefundReason = 'user_cancel' | 'group_failed' | 'late_payment' | 'after_sales';
 
 export const MAX_REFUND_RETRIES = 5;
 
@@ -33,7 +33,7 @@ export class Refund {
 
   static create(input: { refundId?: string; paymentId: string; orderId: string; userId: string; amountFen: number; reason: RefundReason; now: Date; randomHex?: () => string }): Refund {
     if (!Number.isInteger(input.amountFen) || input.amountFen < 1) throw new ApplicationError('VALIDATION_FAILED', '退款金额非法');
-    if (!['user_cancel', 'group_failed', 'late_payment'].includes(input.reason)) throw new ApplicationError('VALIDATION_FAILED', '退款原因非法');
+    if (!['user_cancel', 'group_failed', 'late_payment', 'after_sales'].includes(input.reason)) throw new ApplicationError('VALIDATION_FAILED', '退款原因非法');
     const randomHex = input.randomHex ?? (() => crypto.randomUUID().replace(/-/g, ''));
     return new Refund({
       refundId: input.refundId ?? crypto.randomUUID(),

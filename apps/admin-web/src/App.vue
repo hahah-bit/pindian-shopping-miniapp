@@ -12,6 +12,7 @@ import AdminOrdersView from './features/admin-orders/AdminOrdersView.vue';
 import AdminPayRefundView from './features/admin-payrefund/AdminPayRefundView.vue';
 import AdminFulfillmentView from './features/admin-fulfillment/AdminFulfillmentView.vue';
 import AdminCsView from './features/admin-cs/AdminCsView.vue';
+import AdminTicketsView from './features/after-sales/AdminTicketsView.vue';
 import { currentPath, navigate } from './platform/router';
 import { ApiClientError, fetchMe, logout, storedToken, storeToken } from './platform/api-client';
 
@@ -126,7 +127,8 @@ onMounted(restoreSession);
         <AdminOrdersView v-else-if="currentPath === '/orders'" />
         <AdminPayRefundView v-else-if="currentPath === '/payments'" />
         <AdminFulfillmentView v-else-if="currentPath === '/fulfillment'" />
-        <AdminCsView v-else-if="currentPath === '/customer-service'" />
+        <AdminCsView v-else-if="currentPath === '/customer-service'" :principal="admin" />
+        <AdminTicketsView v-else-if="currentPath === '/after-sales'" :principal="admin" />
         <ModulePlaceholder v-else :title="title" />
       </section>
     </main>

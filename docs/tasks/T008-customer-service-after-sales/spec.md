@@ -43,8 +43,8 @@
 | GET | /api/admin/v1/after-sales/tickets/:id | 工单详情 + actions（含退款/补发结果引用） |
 | POST | /api/admin/v1/after-sales/tickets/:id/accept | open→processing（审计） |
 | POST | /api/admin/v1/after-sales/tickets/:id/reply | 处理回复（记录 action） |
-| POST | /api/admin/v1/after-sales/tickets/:id/refund | 发起全额退款：`{orderId}`——经支付公开用例校验（已支付/可退额度/组失败或用户取消语义），成功记录 refundId+审计；失败 409 原因 |
-| POST | /api/admin/v1/after-sales/tickets/:id/reshipment | 发起补发：`{fulfillmentId, quantityGrams, company, trackingNo}`——经履约公开用例（D013 规则），记录 shipmentId+审计 |
+| POST | /api/admin/v1/after-sales/tickets/:id/refund | D020：`{orderId,reason,clientRequestId}`→202待审核申请，按成功/失败组本人有效支付事实核定全额；批准后创建after_sales退款，到账另看渠道状态 |
+| POST | /api/admin/v1/after-sales/tickets/:id/reshipment | D020：`{orderId,fulfillmentId,quantityGrams,company,trackingNo,reason,clientRequestId}`→202待审核，批准后创建补发包裹并审计；最小单位见F036 |
 | POST | /api/admin/v1/after-sales/tickets/:id/resolve | 管理员标记解决（附答复） |
 | POST | /api/admin/v1/after-sales/tickets/:id/close | 关闭（附原因；审计） |
 | GET | /api/mini/v1/tickets?&page= | 本人工单列表 |
@@ -84,3 +84,7 @@
 - **Given** 会话 30 条消息，**When** 客户端 afterSeq=20 拉取，**Then** 返回 21-30 升序。
 - **Given** 工单关联已全额退款订单，**When** 管理员再发起退款，**Then** 409 且工单无新 action。
 - **Given** 转工单成功，**When** 用户再发消息，**Then** 409 CONVERSATION_ENDED（converted 只读）。
+
+## 2026-10-02 已批准修订
+
+原D017直接执行建议被用户D020取代，退款和补发先202申请再超级管理员审核执行；详细输入输出、状态、权限、幂等、单位、异常及AP01–08见 [F036 spec](../../features/F036-reviewed-after-sales/spec.md)。会话消息/私有图片/卡片/工单/账号新契约见 [整改契约](../../../contracts/cs-remediation.md)。AC04采用真实在线持久心跳和最少接待量分配；AC05支持waiting_feedback、反复回复和未解决回processing。AC06/08必须验证成功组实付退款、审核并发及跨域事务回滚；最终验证覆盖这些修订。

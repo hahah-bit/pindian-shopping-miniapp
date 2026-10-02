@@ -73,8 +73,9 @@ export function toMinimalUnits(wholeQuantityText: string, unit: string): Minimal
     return { units: Number(units), kind: 'weight' };
   }
   if (COUNTABLE_UNITS.has(normalizedUnit)) {
-    if (parsed.scale > 0) return null; // 计数数量必须整数
-    const units = parsed.mantissa;
+    const divisor = 10n ** BigInt(parsed.scale);
+    if (parsed.mantissa % divisor !== 0n) return null;
+    const units = parsed.mantissa / divisor;
     if (units <= 0n || units > BigInt(MAX_QUANTITY_UNITS)) return null;
     return { units: Number(units), kind: 'countable' };
   }
@@ -111,6 +112,22 @@ export function allocateQuantity(totalGrams: number, orders: AllocationInput[]):
     const base = bases[i] ?? 0;
     return { orderId: o.orderId, grams: base + extra };
   });
+}
+
+/** D019：按 D011 穷举所有有序拼满组合，任何用户零分配都不可售。 */
+export function isPositiveSaleAllocation(text: string, unit: string, allowed: readonly number[]): boolean {
+  const minimal = toMinimalUnits(text, unit);
+  if (!minimal || !allowed.length || allowed.some(u => ![12, 15, 20, 30].includes(u))) return false;
+  let combinations = 0;
+  function visit(remaining: number, sequence: number[]): boolean {
+    if (remaining === 0) {
+      combinations++;
+      return allocateQuantity(minimal!.units, sequence.map((units, i) => ({ orderId: String(i), units }))).every(a => a.grams > 0);
+    }
+    for (const option of new Set(allowed)) if (option <= remaining && !visit(remaining - option, [...sequence, option])) return false;
+    return true;
+  }
+  return visit(60, []) && combinations > 0;
 }
 
 /**

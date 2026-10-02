@@ -29,7 +29,7 @@ export class ShipFulfillmentUseCase {
   async execute(input: {
     fulfillmentId: unknown; quantityGrams: unknown; company: unknown; trackingNo: unknown;
     isReissue: boolean; reason: unknown; adminId: string | null; requestId: string | null;
-  }): Promise<{ fulfillmentOrder: FulfillmentOrder; shipmentId: string }> {
+  },externalTx?:unknown): Promise<{ fulfillmentOrder: FulfillmentOrder; shipmentId: string }> {
     const fulfillmentId = requireUuid(input.fulfillmentId, '履约单 ID');
     const quantityGrams = input.quantityGrams;
     if (!Number.isInteger(quantityGrams) || (quantityGrams as number) <= 0) throw new ApplicationError('VALIDATION_FAILED', '发货数量必须为正整数克');
@@ -41,9 +41,10 @@ export class ShipFulfillmentUseCase {
 
     try {
       // R04：发货、状态与审计同一事务——审计失败整体回滚（不会"已提交却报错"，也不会漏审计）
-      const result = await this.deps.runner.run(async (sessionTx) => {
+      const work=async (sessionTx:unknown) => {
         const fulfillment = await this.deps.fulfillmentOrders.findByIdForUpdate(fulfillmentId, sessionTx);
         if (!fulfillment) throw new ApplicationError('NOT_FOUND', '履约单不存在');
+        if(await this.deps.fulfillmentOrders.isRefundHeld?.(fulfillment.state.orderId,sessionTx))throw new ApplicationError('ORDER_REFUND_HELD','该订单已批准全额退款，不能新增包裹');
         const { order, entity } = fulfillment.addShipment({
           quantityGrams: quantityGrams as number,
           isReissue: input.isReissue,
@@ -62,7 +63,8 @@ export class ShipFulfillmentUseCase {
           detail: { shipmentId: entity.shipmentId, quantityGrams: entity.quantityGrams, company, trackingNo, reason: entity.reissueReason ?? undefined }
         }, sessionTx);
         return { order, entity };
-      });
+      };
+      const result=externalTx?await work(externalTx):await this.deps.runner.run(work);
       return { fulfillmentOrder: result.order, shipmentId: result.entity.shipmentId };
     } catch (error) {
       if ((error as { code?: string }).code === '23505') {

@@ -76,6 +76,9 @@ export class Admin {
   activate(now: Date): Admin {
     return new Admin({ ...this.state, status: 'active', updatedAt: now });
   }
+  disable(now: Date): Admin {
+    return new Admin({ ...this.state, status: 'disabled', updatedAt: now });
+  }
 }
 
 export interface InitialCredentialInput {

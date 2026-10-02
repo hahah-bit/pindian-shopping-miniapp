@@ -35,6 +35,7 @@ interface MessageRow {
   conversation_id: string;
   seq: number;
   sender: MessageState['sender'];
+  actor_id: string | null;
   kind: MessageState['kind'];
   content: Record<string, unknown>;
   internal: boolean;
@@ -48,6 +49,7 @@ function messageOf(row: MessageRow): MessageState {
     conversationId: row.conversation_id,
     seq: row.seq,
     sender: row.sender,
+    actorId: row.actor_id,
     kind: row.kind,
     content: row.content,
     internal: row.internal,
@@ -113,6 +115,54 @@ export class PostgresConversationRepository implements ConversationRepository, A
     });
   }
 
+  async lockUser(userId: string, sessionTx: unknown): Promise<void> {
+    await this.queryIn(sessionTx, client => client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]));
+  }
+
+  async isEligible(agentId: string, now: Date, sessionTx: unknown): Promise<boolean> {
+    return this.queryIn(sessionTx, async client => {
+      const { rows } = await client.query(`SELECT a.id FROM admins a JOIN cs_agent_presence p ON p.agent_id = a.id WHERE a.id = $1 AND a.status = 'active' AND a.role IN ('super_admin','cs_agent','cs_supervisor') AND p.heartbeat_at > $2::timestamptz - interval '60 seconds'`, [agentId, now]);
+      return rows.length > 0;
+    });
+  }
+
+  async heartbeat(agentId: string, now: Date, sessionTx: unknown): Promise<void> {
+    await this.queryIn(sessionTx, client => client.query(`INSERT INTO cs_agent_presence (agent_id, heartbeat_at) VALUES ($1,$2) ON CONFLICT (agent_id) DO UPDATE SET heartbeat_at = EXCLUDED.heartbeat_at`, [agentId, now]));
+  }
+
+  async dispatchQueued(now: Date, sessionTx: unknown): Promise<void> {
+    await this.queryIn(sessionTx, async client => {
+      // 分配共享锁只在此短事务持有；每次选人实时重算接待量。
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('cs.dispatch'))");
+      const { rows: queued } = await client.query<{ id: string }>("SELECT id FROM cs_conversations WHERE status = 'queued' ORDER BY created_at, id LIMIT 100 FOR UPDATE");
+      for (const conversation of queued) {
+        const { rows: candidates } = await client.query<{ id: string }>(`SELECT a.id FROM admins a JOIN cs_agent_presence p ON p.agent_id = a.id WHERE a.status = 'active' AND a.role IN ('super_admin','cs_agent','cs_supervisor') AND p.heartbeat_at > $1::timestamptz - interval '60 seconds' ORDER BY (SELECT COUNT(*) FROM cs_conversations c WHERE c.assigned_agent_id = a.id AND c.status = 'active'), p.heartbeat_at DESC, a.id LIMIT 1`, [now]);
+        if (!candidates[0]) break;
+        await client.query("UPDATE cs_conversations SET status = 'active', assigned_agent_id = $2, updated_at = $3 WHERE id = $1 AND status = 'queued'", [conversation.id, candidates[0].id, now]);
+      }
+      await client.query(`UPDATE cs_agent_presence p SET active_count = (SELECT COUNT(*) FROM cs_conversations c WHERE c.assigned_agent_id = p.agent_id AND c.status = 'active')`);
+    });
+  }
+
+  async listOnline(): Promise<Array<{ id: string; displayName: string; activeCount: number }>> {
+    return this.query(async client => {
+      const { rows } = await client.query<{ id: string; display_name: string; count: string }>(`SELECT a.id, a.display_name, (SELECT COUNT(*) FROM cs_conversations c WHERE c.assigned_agent_id = a.id AND c.status = 'active') AS count FROM admins a JOIN cs_agent_presence p ON p.agent_id = a.id WHERE a.status = 'active' AND a.role IN ('super_admin','cs_agent','cs_supervisor') AND p.heartbeat_at > now() - interval '60 seconds' ORDER BY a.display_name`);
+      return rows.map(r => ({id:r.id,displayName:r.display_name,activeCount:Number(r.count)}));
+    });
+  }
+
+  async listByUser(userId: string, page: number, pageSize: number): Promise<{ items: Conversation[]; total: number }> {
+    return this.query(async client => {
+      const {rows} = await client.query<ConversationRow>(`SELECT ${COLUMNS} FROM cs_conversations WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, [userId,pageSize,(page-1)*pageSize]);
+      const count = await client.query<{count:string}>('SELECT COUNT(*) FROM cs_conversations WHERE user_id = $1',[userId]);
+      return {items:rows.map(conversationOf),total:Number(count.rows[0]?.count??0)};
+    });
+  }
+
+  async acknowledge(conversationId: string, actorId: string, seq: number): Promise<void> {
+    await this.query(client => client.query(`INSERT INTO cs_read_marks (conversation_id,actor_id,last_read_seq) VALUES ($1,$2,$3) ON CONFLICT (conversation_id,actor_id) DO UPDATE SET last_read_seq = GREATEST(cs_read_marks.last_read_seq,EXCLUDED.last_read_seq), updated_at=now()`,[conversationId,actorId,seq]));
+  }
+
   async findLastSeq(conversationId: string, sessionTx?: unknown): Promise<number> {
     return this.queryIn(sessionTx, async (client) => {
       const { rows } = await client.query<{ last: number | null }>(`SELECT MAX(seq) AS last FROM cs_messages WHERE conversation_id = $1`, [conversationId]);
@@ -120,12 +170,12 @@ export class PostgresConversationRepository implements ConversationRepository, A
     });
   }
 
-  async findDuplicate(conversationId: string, clientMessageId: string, sessionTx?: unknown): Promise<MessageState | null> {
+  async findDuplicate(conversationId: string, clientMessageId: string, sender: MessageState['sender'], actorId: string, sessionTx?: unknown): Promise<MessageState | null> {
     return this.queryIn(sessionTx, async (client) => {
       const { rows } = await client.query<MessageRow>(
-        `SELECT id, conversation_id, seq, sender, kind, content, internal, client_message_id, created_at
-         FROM cs_messages WHERE conversation_id = $1 AND client_message_id = $2 LIMIT 1`,
-        [conversationId, clientMessageId]
+        `SELECT id, conversation_id, seq, sender, actor_id, kind, content, internal, client_message_id, created_at
+         FROM cs_messages WHERE conversation_id = $1 AND client_message_id = $2 AND sender = $3 AND actor_id = $4 LIMIT 1`,
+        [conversationId, clientMessageId, sender, actorId]
       );
       return rows[0] ? messageOf(rows[0]) : null;
     });
@@ -133,18 +183,18 @@ export class PostgresConversationRepository implements ConversationRepository, A
 
   async insertMessage(message: MessageState, sessionTx?: unknown): Promise<void> {
     await this.queryIn(sessionTx, (client) => client.query(
-      `INSERT INTO cs_messages (id, conversation_id, seq, sender, kind, content, internal, client_message_id, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [message.messageId, message.conversationId, message.seq, message.sender, message.kind, JSON.stringify(message.content), message.internal, message.clientMessageId, message.createdAt]
+      `INSERT INTO cs_messages (id, conversation_id, seq, sender, kind, content, internal, client_message_id, created_at, actor_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [message.messageId, message.conversationId, message.seq, message.sender, message.kind, JSON.stringify(message.content), message.internal, message.clientMessageId, message.createdAt, message.actorId]
     ));
   }
 
-  async listMessages(conversationId: string, afterSeq: number, limit: number): Promise<MessageState[]> {
+  async listMessages(conversationId: string, afterSeq: number, limit: number, includeInternal = false): Promise<MessageState[]> {
     return this.query(async (client) => {
       const { rows } = await client.query<MessageRow>(
-        `SELECT id, conversation_id, seq, sender, kind, content, internal, client_message_id, created_at
-         FROM cs_messages WHERE conversation_id = $1 AND seq > $2 ORDER BY seq ASC LIMIT $3`,
-        [conversationId, afterSeq, limit]
+        `SELECT id, conversation_id, seq, sender, actor_id, kind, content, internal, client_message_id, created_at
+         FROM cs_messages WHERE conversation_id = $1 AND seq > $2 AND ($4 OR NOT internal) ORDER BY seq ASC LIMIT $3`,
+        [conversationId, afterSeq, limit, includeInternal]
       );
       return rows.map(messageOf);
     });
@@ -161,13 +211,14 @@ export class PostgresConversationRepository implements ConversationRepository, A
     });
   }
 
-  async listByAgent(agentId: string, statuses: string[]): Promise<Conversation[]> {
+  async listByAgent(agentId: string, statuses: string[], page=1,pageSize=50): Promise<Conversation[]> {
     return this.query(async (client) => {
       const { rows } = await client.query<ConversationRow>(
-        `SELECT ${COLUMNS} FROM cs_conversations WHERE assigned_agent_id = $1 AND status = ANY($2::varchar[]) ORDER BY updated_at DESC LIMIT 50`,
-        [agentId, statuses]
+        `SELECT ${COLUMNS} FROM cs_conversations WHERE assigned_agent_id = $1 AND status = ANY($2::varchar[]) ORDER BY updated_at DESC, id DESC LIMIT $3 OFFSET $4`,
+        [agentId, statuses,pageSize,(page-1)*pageSize]
       );
       return rows.map(conversationOf);
     });
   }
+  async countByAgent(agentId:string,statuses:string[]):Promise<number>{return this.query(async c=>{const {rows}=await c.query<{count:string}>('SELECT COUNT(*) FROM cs_conversations WHERE assigned_agent_id=$1 AND status=ANY($2::varchar[])',[agentId,statuses]);return Number(rows[0]?.count??0);});}
 }

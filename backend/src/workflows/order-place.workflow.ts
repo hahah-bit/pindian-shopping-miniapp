@@ -5,6 +5,7 @@ import { buildCompletenessTable, canJoinGroup } from '../contexts/group-buying/d
 import { Order, OrderNumber } from '../contexts/ordering/domain/order';
 import { computeQuote } from '../contexts/ordering/domain/pricing';
 import type { ShareUnits } from '../contexts/catalog/domain/share-option';
+import { isPositiveSaleAllocation } from '../contexts/fulfillment/domain/quantity-allocation';
 
 export interface GroupRepository {
   findById(groupId: string): Promise<Group | null>;
@@ -119,6 +120,7 @@ export class PlaceOrderWorkflow {
     // 3. 商品可售快照（D003：下架即拒绝新预占）
     const sellable = await this.deps.products.getSellableSnapshot(productId);
     if (!sellable) throw new ApplicationError('PRODUCT_NOT_ON_SHELF', '商品已下架或不可售');
+    this.assertAllocation(sellable.snapshot);
     if (typeof units !== 'number' || !sellable.snapshot.allowedShareUnits.includes(units as ShareUnits)) {
       throw new ApplicationError('SHARE_UNIT_INVALID', '份额选项不在商品允许范围内');
     }
@@ -157,6 +159,7 @@ export class PlaceOrderWorkflow {
     const result = await this.deps.runner.run(async (sessionTx) => {
       const group = (await this.deps.groups.findByIdForUpdate(candidate.state.groupId, sessionTx)) ?? candidate;
       if (!group.isOpen || group.state.deadline <= ctx.now) throw new ApplicationError('GROUP_NOT_JOINABLE', '拼单组已结束，无法加入');
+      this.assertAllocation(group.state.snapshot);
       if (!canJoinGroup(group.state.snapshot.allowedShareUnits, table, group.remainingCapacity, ctx.units)) {
         throw new ApplicationError('SHARE_CAPACITY_CONFLICT', '份额容量竞争失败，请重试');
       }
@@ -178,6 +181,10 @@ export class PlaceOrderWorkflow {
       return { order, group: reserved };
     });
     return this.toView(result.order, false);
+  }
+
+  private assertAllocation(snapshot: SalePolicySnapshot): void {
+    if (!isPositiveSaleAllocation(snapshot.wholeQuantityText, snapshot.unit, snapshot.allowedShareUnits)) throw new ApplicationError('PRODUCT_NOT_PUBLISHABLE', '商品数量与份额配置不能保证每位用户获得至少一个最小计量单位');
   }
 
   /** 无候选组：整件预留 + 建组 + 首单（同一事务，失败整体回滚——D002）。 */
@@ -284,4 +291,3 @@ export class CancelUnpaidOrder {
     return { cancelled: true };
   }
 }
-

@@ -30,7 +30,7 @@ export interface RefundOrderPort {
 export class CreateFullRefundUseCase {
   constructor(private readonly deps: { refunds: RefundRepositoryPort; payments: PaymentRepository; clock: Clock }) {}
 
-  async execute(input: { paymentId: unknown; orderId: unknown; userId: unknown; reason: 'user_cancel' | 'group_failed' | 'late_payment' }, sessionTx?: unknown): Promise<{ refundId: string }> {
+  async execute(input: { paymentId: unknown; orderId: unknown; userId: unknown; reason: 'user_cancel' | 'group_failed' | 'late_payment' | 'after_sales' }, sessionTx?: unknown): Promise<{ refundId: string }> {
     const paymentId = uuidOf(input.paymentId, '支付单 ID');
     const orderId = uuidOf(input.orderId, '订单 ID');
     // 事务内读：迟到支付路径中支付事实在同一事务内刚写入，必须用会话连接读取（第三轮 R11）
@@ -38,7 +38,8 @@ export class CreateFullRefundUseCase {
     if (!payment || payment.state.status !== 'succeeded') {
       throw new ApplicationError('REFUND_NOT_ALLOWED', '无已成功的支付事实，不能退款');
     }
-    const existing = await this.deps.refunds.findByPaymentId(paymentId);
+    if(payment.state.orderId!==orderId||payment.state.userId!==input.userId)throw new ApplicationError('NOT_FOUND','支付事实与订单归属不一致');
+    const existing = await this.deps.refunds.findByPaymentId(paymentId,sessionTx);
     const activeSum = existing
       .filter((r) => r.state.status !== 'failed')
       .reduce((sum, r) => sum + r.state.amountFen, 0);

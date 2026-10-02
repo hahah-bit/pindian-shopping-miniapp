@@ -2,12 +2,22 @@
 import { onMounted, ref } from 'vue';
 import type { AdminFulfillmentDetail, AdminFulfillmentGroupSummary } from '@pindian/contracts';
 import { ApiClientError, completeFulfillmentOrder, exportShipmentsCsv, getFulfillmentGroup, listFulfillmentGroups, shipFulfillmentOrder, updateFulfillmentReceiver } from '../../platform/api-client';
-import { storedToken } from '../../platform/api-client';
+import { storedToken, request } from '../../platform/api-client';
 
-/** 履约管理（T007 F028）：待履约组、分配明细、发货/补发、导出发货单。发货数量以整数克填写。 */
+/** 履约管理（T007 F028）：待履约组、分配明细、发货/补发、导出发货单。发货数量以整数最小计量单位填写。 */
 
+import {post} from '../admin-cs/api';
+const anomalyPending=ref<{groupId:string;orderId:string;body:{reason:string;clientRequestId:string}}|null>(null);
+const anomalyBusy=ref(false),anomalyTicket=ref('');
+async function anomaly(groupId:string,orderId:string){
+  if(anomalyBusy.value)return;
+  anomalyPending.value??={groupId,orderId,body:{reason:'历史零分配异常，申请按实际支付金额全额退款',clientRequestId:crypto.randomUUID()}};
+  const p=anomalyPending.value;anomalyBusy.value=true;error.value='';
+  try{const r=await post<{request:{ticketId:string}}>('/api/admin/v1/fulfillment/blocks/'+p.groupId+'/orders/'+p.orderId+'/refund-request',p.body);anomalyTicket.value=r.request.ticketId;anomalyPending.value=null;notice.value='退款申请已提交，等待超级管理员审核';}catch(e){error.value=e instanceof Error?e.message:'申请失败';}finally{anomalyBusy.value=false;}
+}
 const tab = ref<'groups' | 'detail'>('groups');
 const items = ref<AdminFulfillmentGroupSummary[]>([]);
+const blocks = ref<Array<{groupId:string;reason:string;orderIds:string[]}>>([]);
 const detail = ref<AdminFulfillmentDetail[]>([]);
 const detailGroupId = ref('');
 const page = ref(1);
@@ -32,6 +42,7 @@ async function load(targetPage = 1) {
   notice.value = '';
   try {
     const result = await listFulfillmentGroups({ status: statusFilter.value || undefined, page: targetPage, pageSize: 10 });
+    blocks.value = (await request<{items:typeof blocks.value}>('/api/admin/v1/fulfillment/blocks')).items;
     items.value = result.items;
     total.value = result.total;
     page.value = targetPage;
@@ -196,7 +207,9 @@ onMounted(() => load(1));
   <p v-if="error" class="error" role="alert">{{ error }}</p>
   <p v-if="notice" class="hint" role="status">{{ notice }}</p>
   <p v-if="loading" role="status">正在读取…</p>
+  <section v-if="blocks.length && tab === 'groups'" class="error"><h3>暂停履约，待审核处理</h3><p>历史数量保持不变；以下拼单组没有生成履约单，需要按订单处理售后。</p><article v-for="b in blocks" :key="b.groupId"><strong>拼单组 {{b.groupId.slice(0,8)}} · {{b.reason==='ZERO_ALLOCATION'?'数量配置导致零分配':'数量无法履约'}}</strong><p>涉及 {{b.orderIds.length}} 笔订单</p><div v-for="id in b.orderIds" :key="id"><span>订单 {{id}}</span><button v-if="b.reason==='ZERO_ALLOCATION'" :disabled="anomalyBusy||!!anomalyPending" @click="anomaly(b.groupId,id)">申请审核退款</button></div></article></section>
 
+  <p v-if="anomalyPending">申请结果尚未确认。<button :disabled="anomalyBusy" @click="anomaly(anomalyPending.groupId,anomalyPending.orderId)">重试原申请</button><button :disabled="anomalyBusy" @click="anomalyPending=null">放弃重试</button></p><a v-if="anomalyTicket" :href="'#/after-sales?ticketId='+anomalyTicket">查看异常退款工单</a>
   <table v-if="tab === 'groups' && items.length" class="data-table">
     <thead><tr><th>拼单组</th><th>商品</th><th>成功时间</th><th>履约进度（待发/部分/已发/完成）</th><th>操作</th></tr></thead>
     <tbody>
@@ -242,18 +255,18 @@ onMounted(() => load(1));
             <span v-if="!item.shipments.length" style="color: #999">暂无</span>
           </td>
           <td class="actions">
-            <button type="button" @click="openShip(item)">发货 / 补发</button>
-            <button v-if="item.status === 'pending_shipment' || item.status === 'partially_shipped'" type="button" @click="openReceiver(item)">改收货</button>
+            <button type="button" @click="openShip(item)">正常发货</button><a href="#/after-sales">售后补发申请</a>
+            <button v-if="item.status === 'pending_shipment' && item.shipments.length === 0" type="button" @click="openReceiver(item)">改收货</button>
             <button v-if="item.status === 'shipped'" type="button" :disabled="completingId === item.fulfillmentOrderId" @click="markComplete(item)">{{ completingId === item.fulfillmentOrderId ? '提交中…' : '标记完成' }}</button>
           </td>
         </tr>
       </tbody>
     </table>
-    <p v-if="!loading && !detail.length && !error" class="placeholder"><h2>暂无履约单</h2></p>
+    <div v-if="!loading && !detail.length && !error" class="placeholder"><h2>暂无履约单</h2></div>
   </template>
 
   <div v-if="shipTarget" class="detail-panel">
-    <div class="panel-head"><h3>发货 · {{ shipTarget.orderNo }}（应发 {{ shipTarget.allocatedQuantityText }} 斤）</h3><button type="button" @click="shipTarget = null">关闭</button></div>
+    <div class="panel-head"><h3>发货 · {{ shipTarget.orderNo }}（应发 {{ shipTarget.allocatedQuantityText }} {{shipTarget.unit}}）</h3><button type="button" @click="shipTarget = null">关闭</button></div>
     <dl class="detail-grid">
       <div><dt>收货人</dt><dd>{{ shipTarget.receiver.name }} {{ shipTarget.receiver.phoneMasked }}</dd></div>
       <div><dt>地址</dt><dd>{{ shipTarget.receiver.province }}{{ shipTarget.receiver.city }}{{ shipTarget.receiver.district }} {{ shipTarget.receiver.detail }}</dd></div>
@@ -263,8 +276,7 @@ onMounted(() => load(1));
       <input v-model="shipForm.quantityGrams" :placeholder="`本次数量（${quantityLabel(shipTarget)}）`" :aria-label="`发货数量（${quantityLabel(shipTarget)}）`" style="width: 140px" />
       <input v-model="shipForm.company" placeholder="快递公司" aria-label="快递公司" style="width: 120px" />
       <input v-model="shipForm.trackingNo" placeholder="运单号" aria-label="运单号" style="width: 180px" />
-      <label style="display: flex; align-items: center; gap: 4px"><input v-model="shipForm.isReissue" type="checkbox" />补发</label>
-      <input v-if="shipForm.isReissue" v-model="shipForm.reason" placeholder="补发原因（必填）" aria-label="补发原因" style="width: 180px" />
+
       <button type="button" class="primary" :disabled="shipping" @click="confirmShip">{{ shipping ? '提交中…' : '确认发货' }}</button>
     </div>
     <p class="hint">非补发发货计入进度：Σ数量 = 分配数量即全部发货；补发仅记录轨迹，不改变进度。运单号全局唯一。数量单位按商品：重量商品为**克**、计数商品为**{{ shipTarget.unit }}**（件数）。</p>

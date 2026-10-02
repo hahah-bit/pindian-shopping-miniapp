@@ -19,6 +19,7 @@ export interface MessageState {
   conversationId: string;
   seq: number;
   sender: 'user' | 'agent' | 'system';
+  actorId: string | null;
   kind: MessageKind;
   content: Record<string, unknown>;
   internal: boolean;
@@ -73,6 +74,10 @@ export class Conversation {
   /** 客服可见性：分配给自己的会话；用户可见性由用例按 userId 校验。 */
   isAssignedTo(agentId: string): boolean {
     return this.state.status === 'active' && this.state.assignedAgentId === agentId;
+  }
+
+  canRead(agentId: string): boolean {
+    return this.state.assignedAgentId === agentId;
   }
 
   end(now: Date): Conversation {

@@ -1,0 +1,2 @@
+import type{ActionRequest}from'../domain/action-request';
+export function approvalView(request:ActionRequest,internal=false){const s=request.state;return {id:s.id,ticketId:s.ticketId,orderId:s.orderId,kind:s.kind,status:s.status,reason:s.reason,payload:s.payload,amountFen:s.amountFen,reviewReason:s.reviewReason,resultId:s.resultId,createdAt:s.createdAt.toISOString(),reviewedAt:s.reviewedAt?.toISOString()??null,...(internal?{requesterId:s.requesterId,reviewerId:s.reviewerId}:{})};}

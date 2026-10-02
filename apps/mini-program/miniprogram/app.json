@@ -8,7 +8,9 @@
     "features/address/pages/form/index",
     "features/orders/pages/detail/index",
     "features/cs/pages/chat/chat",
-    "features/cs/pages/index/index"
+    "features/cs/pages/index/index",
+    "features/cs/pages/ticket-form/index",
+    "features/cs/pages/ticket-detail/index"
   ],
   "window": {
     "navigationBarTitleText": "拼单购物",

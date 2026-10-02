@@ -1,4 +1,4 @@
-import { getCurrentConversation, openConversation, listMyTickets } from '../../../../platform/cs-api';
+import { getCurrentConversation, openConversation, listMyTickets, listHistory } from '../../../../platform/cs-api';
 import { UserAuthExpiredError } from '../../../../platform/user-auth';
 
 const TICKET_TYPE_TEXT: Record<string, string> = {
@@ -6,7 +6,7 @@ const TICKET_TYPE_TEXT: Record<string, string> = {
   product_issue: '商品问题', shipment_issue: '发货问题', complaint: '投诉建议', other: '其他问题'
 };
 const TICKET_STATUS_TEXT: Record<string, string> = {
-  open: '待处理', processing: '处理中', resolved: '已解决', closed: '已关闭'
+  open: '待处理', processing: '处理中', waiting_feedback:'等待反馈', resolved: '已解决', closed: '已关闭'
 };
 
 Page({
@@ -16,6 +16,7 @@ Page({
     conversation: null as { id: string; status: string; hasAgent: boolean } | null,
     tickets: [] as Array<{ id: string; typeText: string; statusText: string; title: string }>,
     submitting: false
+    ,history: [] as Array<{id:string;statusText:string}>,historyPage:1,ticketPage:1,historyTotal:0,ticketTotal:0
   },
 
   onShow() {
@@ -25,14 +26,14 @@ Page({
   async load() {
     this.setData({ loading: true, error: '' });
     try {
-      const [convResult, ticketResult] = await Promise.all([
-        getCurrentConversation().catch(() => ({ conversation: null })),
-        listMyTickets().catch(() => ({ items: [], total: 0 }))
+      const [convResult, ticketResult,history] = await Promise.all([
+        getCurrentConversation(), listMyTickets(), listHistory()
       ]);
       this.setData({
         loading: false,
         conversation: convResult.conversation,
-        tickets: ticketResult.items.map((t) => ({ id: t.id, typeText: TICKET_TYPE_TEXT[t.type] ?? t.type, statusText: TICKET_STATUS_TEXT[t.status] ?? t.status, title: t.title }))
+        tickets: ticketResult.items.map((t) => ({ id: t.id, typeText: TICKET_TYPE_TEXT[t.type] ?? t.type, statusText: TICKET_STATUS_TEXT[t.status] ?? t.status, title: t.title })),ticketPage:1,ticketTotal:ticketResult.total,
+        history:history.items.map(c=>({id:c.id,statusText:c.status==='ended'?'已结束':c.status==='converted'?'已转工单':c.status==='queued'?'排队留言':'接待中'})),historyPage:1,historyTotal:history.total
       });
     } catch (cause) {
       if (cause instanceof UserAuthExpiredError) { wx.navigateTo({ url: '/features/profile/pages/index/index' }); return; }
@@ -60,5 +61,9 @@ Page({
 
   retry() {
     void this.load();
-  }
+  },
+  create(){wx.navigateTo({url:'/features/cs/pages/ticket-form/index'});},
+  openTicket(e:WechatMiniprogram.TouchEvent){wx.navigateTo({url:`/features/cs/pages/ticket-detail/index?id=${e.currentTarget.dataset.id}`});},
+  async moreTickets(){try{const r=await listMyTickets(this.data.ticketPage+1);this.setData({ticketPage:this.data.ticketPage+1,tickets:[...this.data.tickets,...r.items.map(t=>({id:t.id,title:t.title,typeText:TICKET_TYPE_TEXT[t.type]??t.type,statusText:TICKET_STATUS_TEXT[t.status]??t.status}))]});}catch(e){wx.showToast({title:e instanceof Error?e.message:'读取失败',icon:'none'});}},
+  async moreHistory(){try{const r=await listHistory(this.data.historyPage+1);this.setData({historyPage:this.data.historyPage+1,history:[...this.data.history,...r.items.map(c=>({id:c.id,statusText:c.status==='ended'?'已结束':c.status==='converted'?'已转工单':c.status==='queued'?'排队留言':'接待中'}))]});}catch(e){wx.showToast({title:e instanceof Error?e.message:'读取失败',icon:'none'});}}
 });

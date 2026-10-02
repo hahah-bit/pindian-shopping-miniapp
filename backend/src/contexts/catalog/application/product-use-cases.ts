@@ -42,7 +42,7 @@ function normalizeMediaIdList(input: unknown): string[] {
 /** 编辑商品：字段与图片关联全量替换。 */
 export class UpdateProduct {
   private readonly clock: Clock;
-  constructor(private readonly deps: { products: ProductRepository; media: MediaRepository; clock?: Clock }) {
+  constructor(private readonly deps: { products: ProductRepository; media: MediaRepository; clock?: Clock; validateAllocation?: (text: string, unit: string, allowed: readonly number[]) => void }) {
     this.clock = deps.clock ?? new SystemClock();
   }
 
@@ -65,6 +65,7 @@ export class UpdateProduct {
       },
       this.clock.now()
     );
+    if (updated.state.status === 'on_shelf') this.deps.validateAllocation?.(updated.state.wholeQuantityText, updated.state.unit, updated.state.allowedShareUnits);
     await this.deps.products.save(updated);
     return updated;
   }
@@ -73,7 +74,7 @@ export class UpdateProduct {
 /** 上架：库存事实（available 或 null）由工作流传入；幂等。 */
 export class PublishProduct {
   private readonly clock: Clock;
-  constructor(deps: { products: ProductRepository; clock?: Clock }) {
+  constructor(private readonly deps: { products: ProductRepository; clock?: Clock; validateAllocation?: (text: string, unit: string, allowed: readonly number[]) => void }) {
     this.products = deps.products;
     this.clock = deps.clock ?? new SystemClock();
   }
@@ -83,6 +84,7 @@ export class PublishProduct {
     const productId = requireProductId(input.productId);
     const existing = await this.products.findById(productId);
     if (!existing) throw new ApplicationError('NOT_FOUND', '商品不存在');
+    this.deps.validateAllocation?.(existing.state.wholeQuantityText, existing.state.unit, existing.state.allowedShareUnits);
     const published = existing.publish(input.stockAvailableWholeItems, this.clock.now());
     if (published !== existing) await this.products.save(published);
     return published;

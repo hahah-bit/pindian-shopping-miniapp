@@ -1,0 +1,2 @@
+@import "../index/index.wxss";
+input,textarea,picker{display:block;padding:22rpx 0;width:100%;border-bottom:1rpx solid #ddd}textarea{height:240rpx;box-sizing:border-box}

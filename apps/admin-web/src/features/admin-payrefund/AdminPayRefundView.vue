@@ -21,7 +21,7 @@ const retrying = ref(false);
 
 const PAY_STATUS: Record<string, string> = { created: '已创建', processing: '支付中', unknown: '结果未知', succeeded: '支付成功', closed: '已关闭' };
 const REFUND_STATUS: Record<string, string> = { requested: '待提交', submitted: '已提交', processing: '退款中', succeeded: '已到账', failed: '失败' };
-const REFUND_REASON: Record<string, string> = { user_cancel: '用户取消', group_failed: '拼单失败', late_payment: '迟到支付' };
+const REFUND_REASON: Record<string, string> = { user_cancel: '用户取消', group_failed: '拼单失败', late_payment: '迟到支付', after_sales: '审核售后退款' };
 const APPLIED_RESULT: Record<string, string> = { applied: '已生效', refunded_not_applied: '不适用（已转退款）', pending_review: '待人工复核' };
 
 async function load(targetPage = 1) {

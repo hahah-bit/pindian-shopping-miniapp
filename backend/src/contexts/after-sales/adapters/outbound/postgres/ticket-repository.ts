@@ -6,6 +6,7 @@ import { withExecutor, type PgExecutor } from '../../../../../adapters-shared/pg
 interface TicketRow {
   id: string;
   user_id: string;
+  assigned_agent_id: string | null;
   conversation_id: string | null;
   type: TicketState['type'];
   status: TicketState['status'];
@@ -18,12 +19,13 @@ interface TicketRow {
   updated_at: Date;
 }
 
-const COLUMNS = `id, user_id, conversation_id, type, status, title, description, related_order_id, related_group_id, related_refund_id, created_at, updated_at`;
+const COLUMNS = `id, user_id, assigned_agent_id, conversation_id, type, status, title, description, related_order_id, related_group_id, related_refund_id, created_at, updated_at`;
 
 function ticketOf(row: TicketRow): Ticket {
   return Ticket.rehydrate({
     ticketId: row.id,
     userId: row.user_id,
+    assignedAgentId: row.assigned_agent_id,
     conversationId: row.conversation_id,
     type: row.type,
     status: row.status,
@@ -57,20 +59,22 @@ export class PostgresTicketRepository implements TicketRepository {
     return this.query(work);
   }
 
-  async insert(ticket: Ticket, sessionTx?: unknown): Promise<void> {
+  async insert(ticket: Ticket, sessionTx?: unknown, clientTicketId?: string): Promise<void> {
     const s = ticket.state;
     await this.queryIn(sessionTx, (client) => client.query(
-      `INSERT INTO after_sales_tickets (id, user_id, conversation_id, type, status, title, description, related_order_id, related_group_id, related_refund_id, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [s.ticketId, s.userId, s.conversationId, s.type, s.status, s.title, s.description, s.relatedOrderId, s.relatedGroupId, s.relatedRefundId, s.createdAt, s.updatedAt]
+      `INSERT INTO after_sales_tickets (id, user_id, conversation_id, type, status, title, description, related_order_id, related_group_id, related_refund_id, created_at, updated_at,client_ticket_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [s.ticketId, s.userId, s.conversationId, s.type, s.status, s.title, s.description, s.relatedOrderId, s.relatedGroupId, s.relatedRefundId, s.createdAt, s.updatedAt,clientTicketId??null]
     ));
   }
+
+  async findByClientKey(userId:string,key:string,tx:unknown):Promise<Ticket|null>{return this.queryIn(tx,async c=>{const {rows}=await c.query<TicketRow>(`SELECT ${COLUMNS} FROM after_sales_tickets WHERE user_id=$1 AND client_ticket_id=$2`,[userId,key]);return rows[0]?ticketOf(rows[0]):null;});}
 
   async save(ticket: Ticket, sessionTx?: unknown): Promise<void> {
     const s = ticket.state;
     await this.queryIn(sessionTx, (client) => client.query(
-      `UPDATE after_sales_tickets SET status = $2, related_refund_id = $3, updated_at = $4 WHERE id = $1`,
-      [s.ticketId, s.status, s.relatedRefundId, s.updatedAt]
+      `UPDATE after_sales_tickets SET status = $2, related_refund_id = $3, updated_at = $4, assigned_agent_id = $5 WHERE id = $1`,
+      [s.ticketId, s.status, s.relatedRefundId, s.updatedAt, s.assignedAgentId]
     ));
   }
 
@@ -88,11 +92,13 @@ export class PostgresTicketRepository implements TicketRepository {
     });
   }
 
-  async insertAction(ticketId: string, action: TicketActionData, sessionTx?: unknown): Promise<void> {
+  async findActionByClientKey(ticketId:string,actorType:string,actorId:string,key:string,tx:unknown):Promise<TicketActionData|null>{return this.queryIn(tx,async c=>{const {rows}=await c.query<ActionRow>('SELECT action,actor_type,actor_id,detail,created_at FROM after_sales_ticket_actions WHERE ticket_id=$1 AND actor_type=$2 AND actor_id=$3 AND client_action_id=$4',[ticketId,actorType,actorId,key]);const r=rows[0];return r?{action:r.action as TicketActionData['action'],actorType:r.actor_type as TicketActionData['actorType'],actorId:r.actor_id,detail:r.detail,createdAt:r.created_at}:null;});}
+
+  async insertAction(ticketId: string, action: TicketActionData, sessionTx?: unknown,clientActionId?:string): Promise<void> {
     await this.queryIn(sessionTx, (client) => client.query(
-      `INSERT INTO after_sales_ticket_actions (ticket_id, action, actor_type, actor_id, detail, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6)`,
-      [ticketId, action.action, action.actorType, action.actorId, JSON.stringify(action.detail), action.createdAt]
+      `INSERT INTO after_sales_ticket_actions (ticket_id, action, actor_type, actor_id, detail, created_at,client_action_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [ticketId, action.action, action.actorType, action.actorId, JSON.stringify(action.detail), action.createdAt,clientActionId??null]
     ));
   }
 
@@ -106,11 +112,12 @@ export class PostgresTicketRepository implements TicketRepository {
     });
   }
 
-  async listAdmin(query: { status?: string | null; page: number; pageSize: number }): Promise<{ items: Ticket[]; total: number }> {
+  async listAdmin(query: { status?: string | null; page: number; pageSize: number; agentId?: string }): Promise<{ items: Ticket[]; total: number }> {
     return this.query(async (client) => {
       const conditions: string[] = [];
       const params: unknown[] = [];
-      if (query.status && ['open', 'processing', 'resolved', 'closed'].includes(query.status)) {
+      if (query.agentId) { params.push(query.agentId); conditions.push(`(assigned_agent_id = $${params.length} OR status = 'open')`); }
+      if (query.status && ['open', 'processing', 'waiting_feedback','resolved', 'closed'].includes(query.status)) {
         params.push(query.status);
         conditions.push(`status = $${params.length}`);
       }

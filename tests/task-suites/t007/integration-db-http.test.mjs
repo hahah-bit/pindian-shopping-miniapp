@@ -295,6 +295,7 @@ test('T007 集成：履约生成幂等/原子、发货守恒与并发、补发�
 
   // ================= 场景 3：发货守恒/超发/重复运单（AC03） =================
   const fid0 = fulfillmentIdOf(0);
+  await expectHttpError(ship(fid0,shipBody(1,'BYPASS-REVIEW',{isReissue:true,reason:'绕过审核'})),409,'REVIEW_REQUIRED');
   const ship1 = await (await ship(fid0, shipBody(1000, 'SF-T007-1'))).json();
   assert.equal(ship1.data.fulfillmentOrder.status, 'partially_shipped');
   // 确认收货：非 shipped（部分发货）拒绝
@@ -321,13 +322,24 @@ test('T007 集成：履约生成幂等/原子、发货守恒与并发、补发�
   const statuses = [c1.status, c2.status].sort();
   assert.deepEqual(statuses, [201, 409], '并发发货恰一笔成功（锁内守恒）');
 
-  // ================= 场景 4：补发（AC04） =================
-  const reissue = await (await ship(fid0, shipBody(100, 'SF-T007-R1', { isReissue: true, reason: '丢件补发' }))).json();
+  async function reviewedReship(fid,body){
+    const data=JSON.parse(body),order=(await testDb.query('SELECT order_id,user_id FROM fulfillment_orders WHERE id=$1',[fid])).rows[0];
+    const userHeader=order.user_id===USER_A?auth.ua:order.user_id===USER_B?auth.ub:auth.uc;
+    const ticket=(await (await fetch(base+'/api/mini/v1/tickets',{method:'POST',headers:userHeader,body:JSON.stringify({type:'shipment_issue',title:'补发审核',description:data.reason.trim()||'补发请求',orderId:order.order_id,clientTicketId:randomUUID()})})).json()).data.ticket.id;
+    await fetch(base+'/api/admin/v1/after-sales/tickets/'+ticket+'/accept',{method:'POST',headers:adminAuth()});
+    const request=await fetch(base+'/api/admin/v1/after-sales/tickets/'+ticket+'/reshipment',{method:'POST',headers:adminAuth(),body:JSON.stringify({...data,orderId:order.order_id,fulfillmentId:fid,clientRequestId:randomUUID()})});
+    if(request.status!==202)return request;
+    const id=(await request.json()).data.request.id;
+    return fetch(base+'/api/admin/v1/after-sales/requests/'+id+'/review',{method:'POST',headers:adminAuth(),body:JSON.stringify({decision:'approve',reason:'核实补发凭证'})});
+  }
+  // ================= 场景 4：补发（AC04，D020 审核后执行） =================
+  const reissue = await (await reviewedReship(fid0, shipBody(100, 'SF-T007-R1', { isReissue: true, reason: '丢件补发' }))).json();
   void reissue;
+  assert.equal(reissue.data.request.status,'executed');
   assert.equal((await testDb.query('SELECT COUNT(*)::int AS c FROM shipments WHERE fulfillment_order_id = $1 AND is_reissue = true', [fid0])).rows[0].c, 1);
   const detailAfterReissue = await (await fetch(`${base}/api/admin/v1/fulfillment/groups/${GROUP}`, { headers: adminAuth() })).json();
   assert.equal(detailAfterReissue.data.items[0].status, 'shipped', '补发不改变发货进度');
-  await expectHttpError(ship(fid0, shipBody(1, 'SF-T007-R2', { isReissue: true, reason: ' ' })), 400, 'VALIDATION_FAILED');
+  await expectHttpError(reviewedReship(fid0, shipBody(1, 'SF-T007-R2', { isReissue: true, reason: ' ' })), 400, 'VALIDATION_FAILED');
 
   // ================= 场景 5：改址与完成（AC05/AC06） =================
   const fid2 = fulfillmentIdOf(2);
@@ -430,8 +442,23 @@ test('T007 集成：履约生成幂等/原子、发货守恒与并发、补发�
 
   // ================= 场景 9：R06 集成（补发不改进度 + 补发锁地址，克组履约单） =================
   const beforeReissue = (await testDb.query('SELECT status, shipped_quantity_grams FROM fulfillment_orders WHERE id = $1', [fidForAudit])).rows[0];
-  const r9 = await (await ship(fidForAudit, shipBody(3, 'SF-R06-REISSUE', { isReissue: true, reason: '凭证补寄' }))).json();
-  assert.equal(r9.data.fulfillmentOrder.status, beforeReissue.status, '补发不改主进度（状态与补发前一致）');
-  assert.equal(r9.data.fulfillmentOrder.shippedQuantityGrams, Number(beforeReissue.shipped_quantity_grams), '补发不计入已发数量');
+  const r9 = await (await reviewedReship(fidForAudit, shipBody(3, 'SF-R06-REISSUE', { isReissue: true, reason: '凭证补寄' }))).json();
+  assert.equal(r9.data.request.status,'executed');
+  assert.equal((await testDb.query('SELECT status FROM fulfillment_orders WHERE id=$1',[fidForAudit])).rows[0].status, beforeReissue.status, '补发不改主进度（状态与补发前一致）');
+  assert.equal(Number((await testDb.query('SELECT shipped_quantity_grams FROM fulfillment_orders WHERE id=$1',[fidForAudit])).rows[0].shipped_quantity_grams), Number(beforeReissue.shipped_quantity_grams), '补发不计入已发数量');
   await expectHttpError(fetch(`${base}/api/admin/v1/fulfillment/orders/${fidForAudit}/receiver`, { method: 'POST', headers: adminAuth(), body: JSON.stringify({ receiverName: 'x', phone: '13800000000', province: 'a', city: 'b', district: 'c', detail: 'd' }) }), 409, 'RECEIVER_LOCKED');
+
+  // D019 历史 3 件、30/15/15 的真实组：总量等于人数仍可能零分配。
+  const blockedGroup=randomUUID(),blockedSnapshot={...JSON.parse(SNAPSHOT),wholeQuantityText:'3',unit:'件',allowedShareUnits:[30,15]};
+  await testDb.query("INSERT INTO groups(id,product_id,sale_policy_snapshot,deadline,status,paid_units,paid_amount_fen,paid_goods_amount_fen) VALUES($1,$2,$3,now()+interval '1 day','success',60,50500,50000)",[blockedGroup,PRODUCT,JSON.stringify(blockedSnapshot)]);
+  for(let i=0;i<3;i++)await testDb.query("INSERT INTO orders(id,order_no,user_id,product_id,group_id,units,status,total_amount_fen,goods_amount_fen,service_fee_fen,is_final_order,original_price_fen,unit,whole_quantity_text,reference_quantity_text,address_receiver_name,address_phone,address_province,address_city,address_district,address_detail,idempotency_key,reservation_expires_at,paid_at,created_at) SELECT $1,$2,user_id,product_id,$3,$4,status,total_amount_fen,goods_amount_fen,service_fee_fen,is_final_order,original_price_fen,'件','3','3',address_receiver_name,address_phone,address_province,address_city,address_district,address_detail,$5,reservation_expires_at,paid_at,now()+($6::int*interval '1 second') FROM orders WHERE id=$7",[randomUUID(),`BLOCK-${i}`,blockedGroup,[30,15,15][i],randomUUID(),i,orderIds[i]]);
+  await genTask.execute({limit:100});
+  assert.equal((await testDb.query('SELECT count(*)::int c FROM fulfillment_orders WHERE group_id=$1',[blockedGroup])).rows[0].c,0,'整组禁止部分生成');
+  assert.equal((await testDb.query('SELECT reason FROM fulfillment_blocks WHERE group_id=$1',[blockedGroup])).rows[0].reason,'ZERO_ALLOCATION');
+  assert.equal((await fulfillmentRepo.listSuccessGroupIdsWithoutFulfillment(100)).includes(blockedGroup),false,'异常不无限重扫');
+  const blocks=(await (await fetch(`${base}/api/admin/v1/fulfillment/blocks`,{headers:adminAuth()})).json()).data.items;
+  assert.equal(blocks.find(b=>b.groupId===blockedGroup).orderIds.length,3);
+  assert.deepEqual((await testDb.query('SELECT sale_policy_snapshot FROM groups WHERE id=$1',[blockedGroup])).rows[0].sale_policy_snapshot,blockedSnapshot,'历史快照未改写');
+  await testDb.query("UPDATE products SET whole_quantity=3,unit='件',allowed_share_units=ARRAY[30,15] WHERE id=$1",[PRODUCT]);
+  await expectHttpError(fetch(`${base}/api/admin/v1/products/${PRODUCT}/publish`,{method:'POST',headers:adminAuth()}),409,'PRODUCT_NOT_PUBLISHABLE');
 });

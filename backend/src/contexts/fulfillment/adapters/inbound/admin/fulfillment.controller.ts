@@ -23,11 +23,16 @@ export class AdminFulfillmentController {
     @Inject(ShipFulfillmentUseCase) private readonly ship: ShipFulfillmentUseCase,
     @Inject(UpdateReceiverUseCase) private readonly receiver: UpdateReceiverUseCase,
     @Inject(CompleteFulfillmentUseCase) private readonly complete: CompleteFulfillmentUseCase
+    ,@Inject('FULFILLMENT_ORDER_REPOSITORY') private readonly repository: {listBlocks():Promise<unknown[]>}
   ) {}
 
   private admin(request: RequestWithPrincipal): { adminId: string | null; requestId: string | null } {
     return { adminId: request.adminAuth?.adminId ?? null, requestId: request.requestId };
   }
+
+  @Get('blocks')
+  @RequirePermissions('order:manage')
+  async blocks(@Req() request:RequestWithPrincipal){return {data:{items:await this.repository.listBlocks()},requestId:request.requestId};}
 
   @Get('groups')
   @RequirePermissions('order:manage')
@@ -48,7 +53,7 @@ export class AdminFulfillmentController {
       console.error('[fulfillment-export] 导出审计失败，阻断明文导出', id, error instanceof Error ? error.message : error);
       throw new ApplicationError('EXPORT_AUDIT_FAILED', '导出审计不可用，已阻断明文导出，请稍后重试');
     }
-    const header = ['履约单号', '订单号', '用户', '分配数量(克)', '收货人', '电话', '省', '市', '区', '详址', '状态', '快递公司', '运单号', '包裹数量(克)', '补发', '发货时间'];
+    const header = ['履约单号', '订单号', '用户', '分配数量(最小单位)', '计量单位', '收货人', '电话', '省', '市', '区', '详址', '状态', '快递公司', '运单号', '包裹数量(最小单位)', '补发', '发货时间'];
     const escape = (value: unknown) => {
       const text = String(value ?? '');
       return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -56,7 +61,7 @@ export class AdminFulfillmentController {
     const lines = [header.join(',')];
     for (const row of rows) {
       const shipments = (row.shipments as Array<{ company: string; trackingNo: string; quantityGrams: number; isReissue: boolean; shippedAt: string }>) ?? [];
-      const base = [row.fulfillmentOrderId, row.orderNo, row.nickname, row.allocatedQuantityGrams, row.receiverName, row.receiverPhone, row.province, row.city, row.district, row.detail, row.status];
+      const base = [row.fulfillmentOrderId, row.orderNo, row.nickname, row.allocatedQuantityGrams, WEIGHT_KIND[String(row.unit)] ? '克' : row.unit, row.receiverName, row.receiverPhone, row.province, row.city, row.district, row.detail, row.status];
       if (shipments.length === 0) {
         lines.push([...base, '', '', '', '', ''].map(escape).join(','));
       } else {
@@ -83,6 +88,7 @@ export class AdminFulfillmentController {
   @HttpCode(201)
   @RequirePermissions('order:manage')
   async shipShipment(@Param('id') id: string, @Body() body: { quantityGrams?: unknown; company?: unknown; trackingNo?: unknown; isReissue?: boolean; reason?: unknown }, @Req() request: RequestWithPrincipal): Promise<unknown> {
+    if(body?.isReissue)throw new ApplicationError('REVIEW_REQUIRED','补发需通过售后申请并由超级管理员审核');
     const { adminId, requestId } = this.admin(request);
     const result = await this.ship.execute({
       fulfillmentId: id,

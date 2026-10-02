@@ -75,3 +75,7 @@
 - **Given** shipped 履约单，**When** 用户确认收货，**Then** completed_by=user 终态；**When** 再次确认，**Then** 200 现状不变。
 - **Given** 已发货履约单，**When** 管理员改收货信息，**Then** 409 RECEIVER_LOCKED。
 - **Given** 同组两个管理员并发为同一履约单发货各 1000g（分配 1500g），**When** 同时提交，**Then** 恰一笔成功、另一笔 409。
+
+## 2026-10-02 整改与确认
+
+D019禁止所有合法有序组合的零分配；原历史快照不改，生成异常留痕，按T008/F036审核退款。D015已由用户明确确认：管理员无任何包裹时可改址、版本+1+审计；出现任何包裹后锁定。D020补发统一客服申请/超级管理员审核，原HTTP补发直达入口REVIEW_REQUIRED。修改及实际验收见 [T008整改最终验证](../T008-customer-service-after-sales/remediation-verification.md)，不以审计之后补充索引冒称先设计。

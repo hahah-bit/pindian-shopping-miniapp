@@ -48,7 +48,7 @@ export interface HealthInfo {
 
 // ---------- 后台身份与权限（F005） ----------
 
-export type AdminRole = 'super_admin';
+export type AdminRole = 'super_admin' | 'catalog_admin' | 'cs_agent' | 'cs_supervisor';
 
 export type AdminPermission =
   | 'catalog:manage'
@@ -56,7 +56,9 @@ export type AdminPermission =
   | 'media:manage'
   | 'admin:manage'
   | 'user:manage'
-  | 'order:manage';
+  | 'order:manage'
+  | 'agent:manage'
+  | 'agent:supervise';
 
 export interface AdminProfile {
   id: string;

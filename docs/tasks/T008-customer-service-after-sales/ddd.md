@@ -23,7 +23,7 @@
   - I1 消息只能追加到 `queued/active` 会话（ended/converted 只读）；
   - I2 `assignedAgent` 仅在 active 存在；转接=更换 assignedAgent（写审计）；
   - I3 seq 单调：新消息 seq = 组内最大 seq + 1（行锁/唯一约束兜底）；
-  - I4 `clientMessageId` 在会话内唯一（重复投递幂等返回原消息）；
+  - I4 `clientMessageId` 在会话/发送类别/作者身份范围内唯一（同键同内容恢复，异内容冲突）；
   - I5 用户只能读/发本人会话；客服只能读写分配给自己的会话（super_admin 例外只读）；
   - I6 一个用户同一时刻至多一个未结束会话（部分唯一索引）。
 
@@ -38,7 +38,7 @@
   - T1 创建必须关联用户，可选关联 orderId/groupId/refundId（存在性与归属校验）；
   - T2 resolved/closed 终态；closed 可由 open/processing 直接关闭（用户撤回/管理员驳回）；
   - T3 处理记录（TicketAction）只追加：受理/回复/发起退款/发起补发/请求用户反馈/解决/关闭；
-  - T4 发起退款：仅经 Payments 公开用例（资格+累计额度校验），记录 refundId；发起补发：仅经 Fulfillment 公开用例（追加补发包裹），记录 shipmentId——全部写审计；
+  - T4 发起退款/补发先创建待审核ActionRequest；超级管理员批准时再通过Payments/Fulfillment公开用例产生事实，执行/action/审核/停止记录/审计共用sessionTx；
   - T5 类型 ∈ 需求 §7.3 七类。
 
 ## 4. 状态机
@@ -174,5 +174,9 @@ sequenceDiagram
 
 - 消息追加：会话行锁内取 seq + 插入（同事务）；clientMessageId 唯一约束兜底幂等。
 - 分配/转接/结束/转工单：会话行锁 + 状态条件更新（并发接入恰一人成功）。
-- 工单动作：工单行锁 + 状态条件更新；退款/补发协调是**跨域公开用例调用**（支付域内自洽事务），工单 action 与其结果在同一工单事务内记录；若公开用例失败→工单事务回滚（action 不留半条）。
+- 工单动作：工单行锁 + 状态条件更新；退款/补发协调是**跨域公开用例调用**（使用调用方sessionTx共享事务），工单 action 与其结果在同一工单事务内记录；若公开用例失败→工单事务回滚（action 不留半条）。
 - 在线状态：客服在线表（心跳刷新，60s 过期），分配仅选在线者；离线自动留言=队列会话无人接入即留言（用户端提示"当前无客服在线，已转留言"）。
+
+## 2026-10-02 整改模型修订
+
+消息幂等唯一范围是 conversation/sender/actorId/clientMessageId；可见性在查重响应和SQL分页前成立，nextSeq与水位区分。Ticket使用assignedAgentId和waiting_feedback回环；动作客户端键按工单/身份类别/身份ID唯一。D020新增独立ActionRequest聚合，pending→executed/rejected；执行仅由审核用例通过Payments/Fulfillment公开用例产生，退款/action/审核/履约停止/审计共用同一事务。详细类图、状态与失败竞争时序见 [F036 DDD](../../features/F036-reviewed-after-sales/ddd.md)，覆盖原直接执行描述。

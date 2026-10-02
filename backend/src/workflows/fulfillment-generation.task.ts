@@ -47,6 +47,7 @@ export class FulfillmentGenerationTask {
     // R01（已确认 D011）：按快照单位换算最小履约单位（重量克化/计数整件/未知单位拒绝）
     const minimal = toMinimalUnits(snapshot.wholeQuantityText, snapshot.unit);
     if (minimal === null) {
+      await this.deps.scan.recordBlocked(groupId, 'INVALID_QUANTITY');
       console.error('[fulfillment-gen] 整件数量无法按单位换算为最小履约单位，跳过组', groupId, snapshot.wholeQuantityText, snapshot.unit);
       return 0;
     }
@@ -57,17 +58,24 @@ export class FulfillmentGenerationTask {
       return 0;
     }
     // 2026-10-02 复验 P1：计数商品总量 < 订单数（产生零分配）→ 不可拆分配置，
-    // 整组拒绝生成并留痕（人工修正数量后重扫恢复）；不部分生成、不超发、不删已有履约。
+    // 整组暂停并记录异常，保留历史快照，交由审核退款流程；不部分生成、不超发。
     if (totalGrams < paidOrders.length) {
+      await this.deps.scan.recordBlocked(groupId, 'ZERO_ALLOCATION');
       console.error('[fulfillment-gen] 整件最小单位数小于订单数（将产生零分配），拒绝生成', groupId, { totalUnits: totalGrams, orders: paidOrders.length });
       return 0;
     }
     const allocations = allocateQuantity(totalGrams, paidOrders.map((o) => ({ orderId: o.orderId, units: o.units })));
+    if (allocations.some(a => a.grams <= 0)) {
+      await this.deps.scan.recordBlocked(groupId, 'ZERO_ALLOCATION');
+      return 0;
+    }
     const gramsByOrder = new Map(allocations.map((a) => [a.orderId, a.grams]));
     const now = this.deps.clock.now();
     const created = await this.deps.runner.run(async (sessionTx) => {
+      await this.deps.scan.lockGroup?.(groupId,sessionTx);
       let count = 0;
       for (const order of paidOrders) {
+        if(await this.deps.scan.isRefundHeld?.(order.orderId,sessionTx))continue;
         const fulfillment = FulfillmentOrder.create({
           groupId,
           orderId: order.orderId,

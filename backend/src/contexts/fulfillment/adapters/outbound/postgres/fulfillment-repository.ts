@@ -85,6 +85,11 @@ const SHIPMENT_COLUMNS = `id, fulfillment_order_id, quantity_grams, is_reissue, 
 export class PostgresFulfillmentRepository implements FulfillmentOrderRepository, FulfillmentScanPorts {
   constructor(private readonly pool: PgExecutor) {}
 
+  async lockGroup(groupId:string,tx:unknown){await this.queryIn(tx,c=>c.query('SELECT id FROM groups WHERE id=$1 FOR UPDATE',[groupId]));}
+  async isRefundHeld(orderId:string,tx?:unknown){return this.queryIn(tx,async c=>{const{rows}=await c.query('SELECT order_id FROM fulfillment_refund_holds WHERE order_id=$1',[orderId]);return rows.length>0;});}
+  async holdRefund(orderId:string,refundId:string,tx:unknown){const f=await this.findByOrderId(orderId,tx);if(f)await this.findByIdForUpdate(f.state.fulfillmentOrderId,tx);await this.queryIn(tx,c=>c.query('INSERT INTO fulfillment_refund_holds(order_id,refund_id) VALUES($1,$2) ON CONFLICT(order_id) DO NOTHING',[orderId,refundId]));}
+  async isZeroAllocationGroup(groupId:string,tx:unknown){return this.queryIn(tx,async c=>{const{rows}=await c.query("SELECT group_id FROM fulfillment_blocks WHERE group_id=$1 AND reason='ZERO_ALLOCATION'",[groupId]);return rows.length>0;});}
+
   private async query<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
     return withExecutor(this.pool, work);
   }
@@ -166,8 +171,9 @@ export class PostgresFulfillmentRepository implements FulfillmentOrderRepository
       const { rows } = await client.query<{ id: string }>(
         `SELECT g.id FROM groups g
          WHERE g.status = 'success'
-         AND EXISTS (SELECT 1 FROM orders o WHERE o.group_id = g.id AND o.status = 'paid')
+         AND EXISTS (SELECT 1 FROM orders o WHERE o.group_id = g.id AND o.status = 'paid' AND NOT EXISTS (SELECT 1 FROM fulfillment_refund_holds h WHERE h.order_id=o.id))
          AND NOT EXISTS (SELECT 1 FROM fulfillment_orders f WHERE f.group_id = g.id)
+         AND NOT EXISTS (SELECT 1 FROM fulfillment_blocks b WHERE b.group_id = g.id)
          ORDER BY g.updated_at ASC LIMIT $1`,
         [limit]
       );
@@ -184,6 +190,17 @@ export class PostgresFulfillmentRepository implements FulfillmentOrderRepository
       const row = rows[0];
       if (!row) return null;
       return { groupId: row.id, wholeQuantityText: row.snapshot?.wholeQuantityText ?? '', unit: row.snapshot?.unit ?? '件' };
+    });
+  }
+
+  async recordBlocked(groupId: string, reason: 'ZERO_ALLOCATION' | 'INVALID_QUANTITY'): Promise<void> {
+    await this.query(client => client.query('INSERT INTO fulfillment_blocks (group_id, reason) VALUES ($1, $2) ON CONFLICT (group_id) DO NOTHING', [groupId, reason]));
+  }
+
+  async listBlocks(): Promise<Array<{ groupId: string; reason: string; createdAt: Date; orderIds: string[] }>> {
+    return this.query(async client => {
+      const { rows } = await client.query<{ group_id: string; reason: string; created_at: Date; order_ids: string[] }>(`SELECT b.*, ARRAY(SELECT o.id::text FROM orders o WHERE o.group_id = b.group_id AND o.status = 'paid' ORDER BY o.created_at, o.id) AS order_ids FROM fulfillment_blocks b ORDER BY b.created_at DESC LIMIT 100`);
+      return rows.map(r => ({ groupId: r.group_id, reason: r.reason, createdAt: r.created_at, orderIds: r.order_ids }));
     });
   }
 

@@ -1,129 +1,49 @@
-import { fetchMessages, getCurrentConversation, sendText, endConversation } from '../../../../platform/cs-api';
-import { UserAuthExpiredError } from '../../../../platform/user-auth';
-
-/** 客服会话页（F035）：2s 轮询增量拉取（D016）；发送以 clientMessageId 幂等。 */
-
-let pollTimer: number | null = null;
-
+import {fetchMessages,getConversation,sendMessage,endConversation,newClientMessageId,uploadImage,downloadImage,cardOptions,readCard,acknowledge,type OutgoingMessage} from '../../../../platform/cs-api';
+import {UserAuthExpiredError} from '../../../../platform/user-auth';
+interface DisplayMessage {seq:number;self:boolean;kind:string;text:string;image:string;timeText:string}
 Page({
-  data: {
-    loading: true,
-    error: '',
-    conversationId: '',
-    status: '' as string,
-    hasAgent: false,
-    messages: [] as Array<{ seq: number; self: boolean; text: string; timeText: string }>,
-    input: '',
-    sending: false,
-    scrollInto: ''
-  },
-
-  onLoad(query: Record<string, string | undefined>) {
-    this.setData({ conversationId: query.id ?? '' });
-    void this.bootstrap();
-  },
-
-  onUnload() {
-    if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; }
-  },
-
-  async bootstrap() {
-    this.setData({ loading: true, error: '' });
-    try {
-      const conv = await getCurrentConversation();
-      if (!conv.conversation || conv.conversation.id !== this.data.conversationId) {
-        // 会话已结束/转工单：仍尝试拉历史
-        this.setData({ status: 'ended' });
-      } else {
-        this.setData({ status: conv.conversation.status, hasAgent: conv.conversation.hasAgent });
+  data:{loading:true,error:'',conversationId:'',status:'',hasAgent:false,messages:[] as DisplayMessage[],input:'',sending:false,scrollInto:'',pending:false,hasMore:false,cardKinds:['订单','商品','拼单','退款'],cardKindIndex:0,options:[] as Array<{id:string;label:string}>,optionIndex:0},
+  timer:null as number|null,cursor:0,pulling:false,visible:false,outgoing:null as OutgoingMessage|null,
+  onLoad(query:Record<string,string|undefined>){this.setData({conversationId:query.id??''});const stored=wx.getStorageSync(`cs-outbox:${this.data.conversationId}`) as OutgoingMessage|undefined;if(stored?.clientMessageId){this.outgoing=stored;this.setData({pending:true});}void this.bootstrap();},
+  onShow(){this.visible=true;if(!this.data.loading){void this.pull(false);this.startPolling();}},
+  onHide(){this.visible=false;this.stopPolling();},onUnload(){this.visible=false;this.stopPolling();},
+  stopPolling(){if(this.timer!==null){clearInterval(this.timer);this.timer=null;}},
+  startPolling(){if(this.timer!==null||!this.visible||!['queued','active'].includes(this.data.status))return;this.timer=setInterval(()=>void this.pull(false),2000);},
+  report(cause:unknown){this.setData({error:cause instanceof Error?cause.message:'操作失败'});if(cause instanceof UserAuthExpiredError)wx.showToast({title:'请先重新登录',icon:'none'});},
+  async bootstrap(){this.setData({loading:true,error:''});try{await this.pull(true);this.setData({loading:false});this.startPolling();await this.loadOptions();}catch(e){this.report(e);this.setData({loading:false});}},
+  async pull(initial:boolean){
+    if(this.pulling||!this.data.conversationId)return;this.pulling=true;
+    try{
+      const [page,conv]=await Promise.all([fetchMessages(this.data.conversationId,this.cursor),getConversation(this.data.conversationId)]);
+      const fresh:DisplayMessage[]=[];
+      for(const m of page.messages){
+        let text=String(m.content.text??''),image='';
+        if(m.kind==='image'){try{image=await downloadImage(String(m.content.mediaAssetId));}catch{text='图片下载失败';}}
+        if(m.kind==='card'){try{const data=await readCard(String(m.content.cardKind),String(m.content.cardRefId));if(data.product){const p=data.product as {name:string;originalPriceFen:number};text=`商品：${p.name} · ${(p.originalPriceFen/100).toFixed(2)}元`;}else if(data.order){const o=data.order as {orderNo:string;totalAmountFen:number};text=`订单：${o.orderNo} · ${(o.totalAmountFen/100).toFixed(2)}元`;}else if(data.group){text=`拼单进度 ${(data.group as {paidUnits:number}).paidUnits}/60`;}else{const r=data.refund as {paidAmountFen:number;items:unknown[]};text=`退款记录 · 实付 ${(r.paidAmountFen/100).toFixed(2)}元 · ${r.items.length}笔退款`;}}catch{text='业务卡片当前不可访问';}}
+        fresh.push({seq:m.seq,self:m.sender==='user',kind:m.kind,text,image,timeText:new Date(m.createdAt).toLocaleTimeString()});
       }
-      await this.pull(true);
-      this.setData({ loading: false });
-      this.startPolling();
-    } catch (cause) {
-      if (cause instanceof UserAuthExpiredError) { wx.showToast({ title: '请先登录', icon: 'none' }); return; }
-      this.setData({ loading: false, error: cause instanceof Error ? cause.message : '加载失败' });
-    }
+      if(!this.visible&&!initial)return;
+      const messages=[...new Map([...this.data.messages,...fresh].map(m=>[m.seq,m])).values()].sort((a,b)=>a.seq-b.seq);
+      this.cursor=page.nextSeq;this.setData({messages,scrollInto:fresh.length?`msg-${fresh[fresh.length-1]?.seq}`:this.data.scrollInto,status:conv.conversation.status,hasAgent:conv.conversation.hasAgent,error:'',hasMore:page.messages.length===50});
+      if(page.messages.length)await acknowledge(this.data.conversationId,this.cursor);
+      if(!['queued','active'].includes(conv.conversation.status))this.stopPolling();
+    }catch(e){if(initial)throw e;this.report(e);}finally{this.pulling=false;}
   },
-
-  startPolling() {
-    if (pollTimer !== null) return;
-    pollTimer = setInterval(() => void this.pull(false), 2000);
+  async loadOptions(){const kind=['order','product','group','refund'][this.data.cardKindIndex]??'order';const r=await cardOptions(kind);this.setData({options:r.items,optionIndex:0});},
+  onCardKind(e:WechatMiniprogram.PickerChange){this.setData({cardKindIndex:Number(e.detail.value)});void this.loadOptions().catch(e=>this.report(e));},
+  onCardOption(e:WechatMiniprogram.PickerChange){this.setData({optionIndex:Number(e.detail.value)});},
+  onInput(e:WechatMiniprogram.Input){this.setData({input:e.detail.value});},
+  async transmit(message?:OutgoingMessage){if(this.data.sending||!['queued','active'].includes(this.data.status))return;
+    if(!this.outgoing&&message)this.outgoing=message;if(!this.outgoing)return;
+    wx.setStorageSync(`cs-outbox:${this.data.conversationId}`,this.outgoing);this.setData({sending:true,pending:true,error:''});
+    try{await sendMessage(this.data.conversationId,this.outgoing);this.outgoing=null;wx.removeStorageSync(`cs-outbox:${this.data.conversationId}`);this.setData({input:'',pending:false});await this.pull(false);}catch(e){this.report(e);}finally{this.setData({sending:false});}
   },
-
-  async pull(initial: boolean) {
-    if (!this.data.conversationId) return;
-    try {
-      const existing = this.data.messages;
-      const lastMsg = existing[existing.length - 1];
-      const lastSeq = lastMsg ? lastMsg.seq : 0;
-      const result = await fetchMessages(this.data.conversationId, lastSeq);
-      if (result.messages.length) {
-        const append = result.messages.map((m) => ({
-          seq: m.seq,
-          self: m.sender === 'user',
-          text: m.kind === 'image' ? '[图片]' : m.kind === 'card' ? `[卡片:${(m.content as { cardKind?: string }).cardKind ?? ''}]` : String((m.content as { text?: string }).text ?? ''),
-          timeText: new Date(m.createdAt).toLocaleTimeString()
-        }));
-        const merged = [...existing, ...append];
-        const last = merged[merged.length - 1];
-        if (last) this.setData({ messages: merged, scrollInto: `msg-${last.seq}` });
-      }
-      // 状态同步（ended/converted 时停止轮询）
-      if (!initial && !this.data.messages.length && result.lastSeq === 0 && this.data.status === '') {
-        this.setData({ status: 'ended' });
-        if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; }
-      }
-    } catch {
-      // 轮询失败静默，下轮重试（UI 不闪烁）
-    }
-  },
-
-  onInput(e: WechatMiniprogram.Input) {
-    this.setData({ input: e.detail.value });
-  },
-
-  async send() {
-    const text = this.data.input.trim();
-    if (!text || this.data.sending || !this.data.conversationId) return;
-    this.setData({ sending: true });
-    try {
-      await sendText(this.data.conversationId, text);
-      this.setData({ input: '' });
-      await this.pull(false);
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : '发送失败';
-      wx.showToast({ title: message, icon: 'none' });
-      if (message.includes('已结束')) {
-        this.setData({ status: 'ended' });
-        if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; }
-      }
-    } finally {
-      this.setData({ sending: false });
-    }
-  },
-
-  async endSession() {
-    if (!this.data.conversationId) return;
-    wx.showModal({
-      title: '结束会话',
-      content: '确定结束本次咨询？',
-      success: (modal) => {
-        if (!modal.confirm) return;
-        void (async () => {
-          try {
-            await endConversation(this.data.conversationId);
-            this.setData({ status: 'ended' });
-            if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; }
-          } catch (cause) {
-            wx.showToast({ title: cause instanceof Error ? cause.message : '操作失败', icon: 'none' });
-          }
-        })();
-      }
-    });
-  },
-
-  retry() {
-    void this.bootstrap();
-  }
+  async send(){const text=this.data.input.trim();if(this.outgoing){await this.transmit();return;}if(text)await this.transmit({clientMessageId:newClientMessageId(),kind:'text',content:{text}});},
+  discard(){this.outgoing=null;wx.removeStorageSync(`cs-outbox:${this.data.conversationId}`);this.setData({pending:false});},
+  chooseImage(){if(this.data.sending||this.outgoing)return;wx.chooseMedia({count:1,mediaType:['image'],success:r=>{const path=r.tempFiles[0]?.tempFilePath;if(!path)return;void (async()=>{this.setData({sending:true});try{const a=await uploadImage(this.data.conversationId,path);this.setData({sending:false});await this.transmit({clientMessageId:newClientMessageId(),kind:'image',content:{mediaAssetId:a.id}});}catch(e){this.report(e);}finally{this.setData({sending:false});}})();}});},
+  async sendCard(){if(this.outgoing)return;const o=this.data.options[this.data.optionIndex];if(!o)return;await this.transmit({clientMessageId:newClientMessageId(),kind:'card',content:{cardKind:['order','product','group','refund'][this.data.cardKindIndex],cardRefId:o.id}});},
+  preview(e:WechatMiniprogram.TouchEvent){const path=e.currentTarget.dataset.path as string;if(path)wx.previewImage({current:path,urls:[path]});},
+  loadMore(){void this.pull(false);},
+  async endSession(){try{await endConversation(this.data.conversationId);this.setData({status:'ended'});this.stopPolling();}catch(e){this.report(e);}},
+  retry(){void this.bootstrap();}
 });

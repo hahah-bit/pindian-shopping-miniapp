@@ -2,7 +2,7 @@ import { ref } from 'vue';
 
 /** 轻量 hash 路由：#/catalog、#/catalog/new、#/catalog/:id、#/media、#/platform 等。 */
 function parseHash(): string {
-  const raw = location.hash.replace(/^#/, '');
+  const raw = location.hash.replace(/^#/, '').split('?')[0]!;
   return raw.startsWith('/') ? raw : '/platform';
 }
 

@@ -114,10 +114,24 @@ import { AdminFulfillmentController } from '../contexts/fulfillment/adapters/inb
 import { MiniFulfillmentController } from '../contexts/fulfillment/adapters/inbound/mini/mini-fulfillment.controller';
 import { PostgresConversationRepository } from '../contexts/customer-service/adapters/outbound/postgres/conversation-repository';
 import { PostgresTicketRepository } from '../contexts/after-sales/adapters/outbound/postgres/ticket-repository';
+import{ApprovalService}from'../contexts/after-sales/application/approval';
+import{PostgresApprovalRepository}from'../contexts/after-sales/adapters/outbound/postgres/approval-repository';
+import{ApprovalController}from'../contexts/after-sales/adapters/inbound/approval.controller';
+import{AfterSalesFulfillmentService}from'../contexts/fulfillment/application/after-sales-fulfillment';
+import{ReviewedAfterSalesEffects}from'../workflows/reviewed-after-sales.effects';
 import { CreateConversationUseCase, AppendMessageUseCase, ListMessagesUseCase } from '../contexts/customer-service/application/conversation-usecases';
-import { AcceptConversationUseCase, TransferConversationUseCase, EndConversationUseCase } from '../contexts/customer-service/application/agent-usecases';
+import { CardProjectionUseCase } from '../contexts/customer-service/application/card-projection';
+import { withExecutor, type PgExecutor } from '../adapters-shared/pg-client';
+import { ManageCsAccounts } from '../contexts/identity-access/application/cs-accounts';
+import { PostgresCsAccountRepository } from '../contexts/identity-access/adapters/outbound/postgres/cs-account-repository';
+import { CsAccountsController } from '../contexts/identity-access/adapters/inbound/admin/cs-accounts.controller';
+import { ChatMediaUseCase } from '../contexts/customer-service/application/chat-media';
+import { ChatMediaController } from '../contexts/customer-service/adapters/inbound/chat-media.controller';
+import { PostgresChatImageRepository } from '../contexts/customer-service/adapters/outbound/postgres/chat-image-repository';
+import { isPositiveSaleAllocation } from '../contexts/fulfillment/domain/quantity-allocation';
+import { AcceptConversationUseCase, TransferConversationUseCase, EndConversationUseCase, AgentHeartbeatUseCase } from '../contexts/customer-service/application/agent-usecases';
 import { CreateTicketUseCase, ProcessTicketUseCase } from '../contexts/after-sales/application/ticket-usecases';
-import { RequestTicketRefundUseCase, ConvertConversationToTicketUseCase } from '../contexts/after-sales/application/ticket-coordination';
+import { ConvertConversationToTicketUseCase } from '../contexts/after-sales/application/ticket-coordination';
 import { MiniCsController, AdminCsController } from '../contexts/customer-service/adapters/inbound/cs-controllers';
 import { MiniCardController } from '../contexts/customer-service/adapters/inbound/mini-card.controller';
 import { ApplicationError } from '../shared/kernel';
@@ -130,6 +144,7 @@ import { TOKENS } from './injection-tokens';
 /** 装配层：绑定端口实现与用例；领域与应用不感知 DI。 */
 @Module({
   controllers: [
+    ApprovalController,
     HealthController,
     PlatformController,
     AuthController,
@@ -152,6 +167,8 @@ import { TOKENS } from './injection-tokens';
     MiniCsController,
     AdminCsController,
     MiniCardController,
+    ChatMediaController,
+    CsAccountsController,
   ],
   providers: [
     { provide: TOKENS.PgPool, useFactory: () => new Pool({ connectionString: readConfig().databaseUrl, max: 10 }) },
@@ -249,8 +266,8 @@ import { TOKENS } from './injection-tokens';
     // 商品目录：商品
     { provide: TOKENS.ProductRepository, useFactory: (pool: Pool) => new PostgresProductRepository(pool), inject: [TOKENS.PgPool] },
     { provide: CreateProductDraft, useFactory: (media: MediaRepository, clock) => new CreateProductDraft({ media, clock }), inject: [TOKENS.MediaRepository, TOKENS.Clock] },
-    { provide: UpdateProduct, useFactory: (products: ProductRepository, media: MediaRepository, clock) => new UpdateProduct({ products, media, clock }), inject: [TOKENS.ProductRepository, TOKENS.MediaRepository, TOKENS.Clock] },
-    { provide: PublishProduct, useFactory: (products: ProductRepository, clock) => new PublishProduct({ products, clock }), inject: [TOKENS.ProductRepository, TOKENS.Clock] },
+    { provide: UpdateProduct, useFactory: (products: ProductRepository, media: MediaRepository, clock) => new UpdateProduct({ products, media, clock, validateAllocation: validateSalesAllocation }), inject: [TOKENS.ProductRepository, TOKENS.MediaRepository, TOKENS.Clock] },
+    { provide: PublishProduct, useFactory: (products: ProductRepository, clock) => new PublishProduct({ products, clock, validateAllocation: validateSalesAllocation }), inject: [TOKENS.ProductRepository, TOKENS.Clock] },
     { provide: UnpublishProduct, useFactory: (products: ProductRepository, clock) => new UnpublishProduct({ products, clock }), inject: [TOKENS.ProductRepository, TOKENS.Clock] },
     // 库存
     { provide: TOKENS.StockRepository, useFactory: (pool: Pool) => new PostgresStockRepository(pool), inject: [TOKENS.PgPool] },
@@ -345,35 +362,39 @@ import { TOKENS } from './injection-tokens';
     { provide: ConfirmReceiptUseCase, useFactory: (repo, pool: Pool, clock) => new ConfirmReceiptUseCase({ fulfillmentOrders: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['FULFILLMENT_ORDER_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
     // T008 客服与售后工单（F031-F034）
     { provide: 'CS_CONVERSATION_REPOSITORY', useFactory: (pool: Pool) => new PostgresConversationRepository(pool), inject: [TOKENS.PgPool] },
+    {provide:ManageCsAccounts,useFactory:(pool:Pool,hasher,audit,clock)=>new ManageCsAccounts({repository:new PostgresCsAccountRepository(pool),hasher,audit,clock,runner:new PostgresTransactionRunner(pool)}),inject:[TOKENS.PgPool,TOKENS.PasswordHasher,'FULFILLMENT_AUDIT',TOKENS.Clock]},
     { provide: 'AFTER_SALES_TICKET_REPOSITORY', useFactory: (pool: Pool) => new PostgresTicketRepository(pool), inject: [TOKENS.PgPool] },
-    { provide: 'CS_REFUND_PORT', useFactory: (orders, groups, payments, refunds, pool: Pool, clock) => {
-        const creator = new CreateFullRefundUseCase({ refunds, payments, clock });
-        return {
-          async checkRefundable(input: { orderId: string }) {
-            const payment = await payments.findByOrderId(input.orderId).catch(() => null);
-            if (!payment) return { refundable: false, reason: '订单无支付事实' };
-            if (payment.state.status !== 'succeeded') return { refundable: false, reason: '订单支付未完成' };
-            return { refundable: true };
-          },
-          async createFullRefund(input: { orderId: string; reason: string }) {
-            const payment = await payments.findByOrderId(input.orderId);
-            if (!payment) throw new ApplicationError('REFUND_NOT_ALLOWED', '订单无支付事实');
-            return creator.execute({ paymentId: payment.state.paymentId, orderId: input.orderId, userId: payment.state.userId, reason: 'group_failed' as const });
-          }
-        };
-      }, inject: ['ORDER_REPOSITORY', 'GROUP_REPOSITORY', 'PAYMENT_REPOSITORY', 'REFUND_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
+    {provide:'AFTER_SALES_APPROVAL_REPOSITORY',useFactory:(pool:Pool)=>new PostgresApprovalRepository(pool),inject:[TOKENS.PgPool]},
+    {provide:AfterSalesFulfillmentService,useFactory:(repo,ship)=>new AfterSalesFulfillmentService(repo,ship),inject:['FULFILLMENT_ORDER_REPOSITORY',ShipFulfillmentUseCase]},
+    {provide:ReviewedAfterSalesEffects,useFactory:(orders,groups,payments,refunds,creator,fulfillment)=>new ReviewedAfterSalesEffects({orders,groups,payments,refunds,creator,fulfillment}),inject:['ORDER_REPOSITORY','GROUP_REPOSITORY','PAYMENT_REPOSITORY','REFUND_REPOSITORY','REFUND_CREATOR',AfterSalesFulfillmentService]},
+    {provide:ApprovalService,useFactory:(requests,tickets,effects,audit,pool:Pool,clock)=>new ApprovalService({requests,tickets,effects,audit,runner:new PostgresTransactionRunner(pool),clock}),inject:['AFTER_SALES_APPROVAL_REPOSITORY','AFTER_SALES_TICKET_REPOSITORY',ReviewedAfterSalesEffects,'FULFILLMENT_AUDIT',TOKENS.PgPool,TOKENS.Clock]},
     { provide: CreateConversationUseCase, useFactory: (repo, pool: Pool, clock) => new CreateConversationUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
-    { provide: AppendMessageUseCase, useFactory: (repo, pool: Pool, clock) => new AppendMessageUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
-    { provide: ListMessagesUseCase, useFactory: (repo) => new ListMessagesUseCase({ conversations: repo, listMessages: (id: string, afterSeq: number, limit: number) => repo.listMessages(id, afterSeq, limit) }), inject: ['CS_CONVERSATION_REPOSITORY'] },
+    { provide: ChatMediaUseCase, useFactory:(repo, pool:Pool, inspector, clock)=>new ChatMediaUseCase({conversations:repo,images:new PostgresChatImageRepository(pool),inspector,clock}),inject:['CS_CONVERSATION_REPOSITORY',TOKENS.PgPool,ImageInspector,TOKENS.Clock]},
+    { provide: AppendMessageUseCase, useFactory: (repo, cards, media:ChatMediaUseCase, pool: Pool, clock) => new AppendMessageUseCase({ conversations: repo, authorizeCard: (userId, kind, id) => new CardProjectionUseCase(cards).execute(userId, kind, id), authorizeImage:(cid,id)=>media.assertAttachment(cid,id), runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', 'CARD_PROJECTION_DEPS', ChatMediaUseCase, TOKENS.PgPool, TOKENS.Clock] },
+    { provide: ListMessagesUseCase, useFactory: (repo) => new ListMessagesUseCase({ conversations: repo, listMessages: (id: string, afterSeq: number, limit: number, includeInternal: boolean) => repo.listMessages(id, afterSeq, limit, includeInternal) }), inject: ['CS_CONVERSATION_REPOSITORY'] },
     { provide: AcceptConversationUseCase, useFactory: (repo, pool: Pool, clock) => new AcceptConversationUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
-    { provide: TransferConversationUseCase, useFactory: (repo, audit, pool: Pool, clock) => new TransferConversationUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock, audit }), inject: ['CS_CONVERSATION_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: TransferConversationUseCase, useFactory: (repo, audit, pool: Pool, clock) => new TransferConversationUseCase({ conversations: repo, presence: repo, runner: new PostgresTransactionRunner(pool), clock, audit }), inject: ['CS_CONVERSATION_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: AgentHeartbeatUseCase, useFactory: (repo, pool: Pool, clock) => new AgentHeartbeatUseCase({ presence: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
     { provide: EndConversationUseCase, useFactory: (repo, pool: Pool, clock) => new EndConversationUseCase({ conversations: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
-    { provide: CreateTicketUseCase, useFactory: (repo, pool: Pool, clock) => new CreateTicketUseCase({ tickets: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
-    { provide: ProcessTicketUseCase, useFactory: (repo, pool: Pool, clock) => new ProcessTicketUseCase({ tickets: repo, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
-    { provide: RequestTicketRefundUseCase, useFactory: (repo, refundPort, pool: Pool, clock) => new RequestTicketRefundUseCase({ tickets: repo, refundPort, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', 'CS_REFUND_PORT', TOKENS.PgPool, TOKENS.Clock] },
-    { provide: ConvertConversationToTicketUseCase, useFactory: (tickets, conversations, pool: Pool, clock) => new ConvertConversationToTicketUseCase({ tickets, conversations, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', 'CS_CONVERSATION_REPOSITORY', TOKENS.PgPool, TOKENS.Clock] },
-    { provide: 'MINI_CS_DEPS', useFactory: (create, append, list, repo, end, createTicket, tickets, processTicket) => ({ create, append, list, conversations: repo, end, createTicket, tickets, processTicket }), inject: [CreateConversationUseCase, AppendMessageUseCase, ListMessagesUseCase, 'CS_CONVERSATION_REPOSITORY', EndConversationUseCase, CreateTicketUseCase, 'AFTER_SALES_TICKET_REPOSITORY', ProcessTicketUseCase] },
+    { provide: 'CS_OWNED_REFERENCES', useFactory: (orders, reservations, conversations) => ({
+        async assertOwned(input: { userId: string; orderId: string | null; groupId: string | null; conversationId: string | null }, tx: unknown) {
+          await withExecutor(tx as PgExecutor,client=>client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[input.userId]));
+          if (input.orderId) { const order = await orders.findById(input.orderId, tx); if (!order || order.state.userId !== input.userId) throw new ApplicationError('NOT_FOUND', '订单不存在'); }
+          if (input.groupId && !(await reservations.listByGroup(input.groupId, tx)).some((r: { state: { userId: string } }) => r.state.userId === input.userId)) throw new ApplicationError('NOT_FOUND', '拼单组不存在');
+          if (input.conversationId) { const conversation = await conversations.findById(input.conversationId, tx); if (!conversation || conversation.state.userId !== input.userId) throw new ApplicationError('NOT_FOUND', '会话不存在'); }
+        }
+      }), inject: ['ORDER_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'CS_CONVERSATION_REPOSITORY'] },
+    { provide: CreateTicketUseCase, useFactory: (repo, references, pool: Pool, clock) => new CreateTicketUseCase({ tickets: repo, references, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', 'CS_OWNED_REFERENCES', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: ProcessTicketUseCase, useFactory: (repo, audit, pool: Pool, clock) => new ProcessTicketUseCase({ tickets: repo, audit, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: ConvertConversationToTicketUseCase, useFactory: (tickets, conversations, references, audit, pool: Pool, clock) => new ConvertConversationToTicketUseCase({ tickets, conversations, references, audit, runner: new PostgresTransactionRunner(pool), clock }), inject: ['AFTER_SALES_TICKET_REPOSITORY', 'CS_CONVERSATION_REPOSITORY', 'CS_OWNED_REFERENCES', 'FULFILLMENT_AUDIT', TOKENS.PgPool, TOKENS.Clock] },
+    { provide: 'MINI_CS_DEPS', useFactory: (create, append, list, repo, end, createTicket, tickets, processTicket,requests) => ({ create, append, list, conversations: repo, end, createTicket, tickets, processTicket,requests }), inject: [CreateConversationUseCase, AppendMessageUseCase, ListMessagesUseCase, 'CS_CONVERSATION_REPOSITORY', EndConversationUseCase, CreateTicketUseCase, 'AFTER_SALES_TICKET_REPOSITORY', ProcessTicketUseCase,'AFTER_SALES_APPROVAL_REPOSITORY'] },
     { provide: 'CARD_PROJECTION_DEPS', useFactory: (products, orders, groups, reservations, payments, refunds) => ({
+        async listOptions(userId:string,kind:string) {
+          if(kind==='product')return (await products.listOnShelf({page:1,pageSize:50})).items.map((p:{state:{productId:string;name:string}})=>({id:p.state.productId,label:p.state.name}));
+          const items: Array<{state:{groupId:string;orderId:string;orderNo:string;totalAmountFen:number}}>=(await orders.listByUser(userId,1,50)).items;
+          if(kind==='group')return [...new Map(items.map(o=>[o.state.groupId,{id:o.state.groupId,label:`订单 ${o.state.orderNo} 的拼单`}])).values()];
+          return items.map(o=>({id:o.state.orderId,label:`${o.state.orderNo} · ${o.state.totalAmountFen/100}元`}));
+        },
         product: { findById: (id: string) => products.findById(id) },
         orders: { findById: (id: string) => orders.findById(id) },
         groups: { findById: (id: string) => groups.findById(id) },
@@ -381,7 +402,8 @@ import { TOKENS } from './injection-tokens';
         payments: { findByOrderId: (id: string) => payments.findByOrderId(id) },
         refunds: { findByOrderId: (id: string) => refunds.findByOrderId(id) }
       }), inject: [TOKENS.ProductRepository, 'ORDER_REPOSITORY', 'GROUP_REPOSITORY', 'SHARE_RESERVATION_REPOSITORY', 'PAYMENT_REPOSITORY', 'REFUND_REPOSITORY'] },
-    { provide: 'ADMIN_CS_DEPS', useFactory: (accept, transfer, end, append, list, repo, convertTicket, tickets, refund, process) => ({ accept, transfer, end, append, list, conversations: repo, convertTicket, tickets, refund, process }), inject: [AcceptConversationUseCase, TransferConversationUseCase, EndConversationUseCase, AppendMessageUseCase, ListMessagesUseCase, 'CS_CONVERSATION_REPOSITORY', ConvertConversationToTicketUseCase, 'AFTER_SALES_TICKET_REPOSITORY', RequestTicketRefundUseCase, ProcessTicketUseCase] },
+    {provide:CardProjectionUseCase,useFactory:deps=>new CardProjectionUseCase(deps),inject:['CARD_PROJECTION_DEPS']},
+    { provide: 'ADMIN_CS_DEPS', useFactory: (accept, transfer, end, append, list, repo, convertTicket, tickets, process, heartbeat, cards) => ({ accept, transfer, end, append, list, conversations: repo, convertTicket, tickets, process, heartbeat, cards }), inject: [AcceptConversationUseCase, TransferConversationUseCase, EndConversationUseCase, AppendMessageUseCase, ListMessagesUseCase, 'CS_CONVERSATION_REPOSITORY', ConvertConversationToTicketUseCase, 'AFTER_SALES_TICKET_REPOSITORY', ProcessTicketUseCase, AgentHeartbeatUseCase, CardProjectionUseCase] },
     // 跨上下文工作流
     {
       provide: CreateProductWorkflow,
@@ -396,6 +418,10 @@ import { TOKENS } from './injection-tokens';
   exports: [CheckReadiness]
 })
 export class FoundationModule {}
+
+function validateSalesAllocation(text: string, unit: string, allowed: readonly number[]): void {
+  if (!isPositiveSaleAllocation(text, unit, allowed)) throw new ApplicationError('PRODUCT_NOT_PUBLISHABLE', '数量与份额配置会造成零分配，请调整商品配置');
+}
 
 function wxPayRuntime() {
   const c = readConfig();

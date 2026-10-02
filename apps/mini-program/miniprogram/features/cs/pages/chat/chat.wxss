@@ -11,3 +11,7 @@
 .composer { display: flex; gap: 12rpx; padding: 16rpx; background: white; }
 .composer input { flex: 1; background: #f2f6f4; border-radius: 10rpx; padding: 14rpx 20rpx; font-size: 28rpx; }
 .composer button { background: #d0563f; color: white; border-radius: 10rpx; font-size: 26rpx; }
+.bubble image { width: 320rpx; max-width: 100%; }
+.attachments { display: flex; flex-wrap: wrap; align-items: center; gap: 14rpx; background: white; padding: 12rpx 20rpx; }
+.attachments picker { max-width: 400rpx; font-size: 24rpx; }
+.attachments button { margin: 0; font-size: 24rpx; }

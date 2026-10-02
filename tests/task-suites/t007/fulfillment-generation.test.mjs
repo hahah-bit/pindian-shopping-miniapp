@@ -21,6 +21,7 @@ class InlineRunner { async run(w) { return w({ tx: 1 }); } }
 class FakeGroups {
   constructor(ids) { this.pending = [...ids]; this.snapshots = { [GROUP]: { wholeQuantityText: '10', unit: '斤' } }; }
   async listSuccessGroupIdsWithoutFulfillment() { return [...this.pending]; }
+  async recordBlocked(id, reason) { this.blocks ??= []; this.blocks.push({id,reason}); }
   async findGroupSnapshot(id) {
     const s = this.snapshots[id];
     return s ? { groupId: id, wholeQuantityText: s.wholeQuantityText, unit: s.unit } : null;

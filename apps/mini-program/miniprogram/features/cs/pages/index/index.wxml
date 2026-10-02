@@ -19,13 +19,17 @@
 
     <view class="card">
       <view class="section-title">我的售后工单</view>
+      <button bindtap="create">提交售后工单</button>
       <view wx:if="{{!tickets.length}}" class="hint">暂无工单。</view>
-      <view wx:for="{{tickets}}" wx:key="id" class="ticket-row">
+      <view wx:for="{{tickets}}" wx:key="id" class="ticket-row" bindtap="openTicket" data-id="{{item.id}}">
         <view>
           <view class="ticket-title">{{item.title}}</view>
           <view class="ticket-meta">{{item.typeText}} · {{item.statusText}}</view>
         </view>
       </view>
+      <button wx:if="{{tickets.length < ticketTotal}}" bindtap="moreTickets">更多工单</button>
+    </view>
+    <view class="card"><view class="section-title">历史会话</view><view wx:if="{{!history.length}}" class="hint">暂无历史会话</view><view wx:for="{{history}}" wx:key="id" class="ticket-row" bindtap="openChat" data-id="{{item.id}}">{{item.statusText}} · 点击查看</view><button wx:if="{{history.length < historyTotal}}" bindtap="moreHistory">更多会话</button>
     </view>
   </block>
 </view>

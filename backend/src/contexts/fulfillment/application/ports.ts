@@ -2,6 +2,7 @@ import type { FulfillmentOrder, ShipmentData } from '../domain/fulfillment-order
 
 /** 履约单仓储端口（Fulfillment 应用层）。sessionTx：与外层事务同连接。 */
 export interface FulfillmentOrderRepository {
+  isRefundHeld?(orderId:string,sessionTx?:unknown):Promise<boolean>;
   insert(order: FulfillmentOrder, sessionTx?: unknown): Promise<void>;
   save(order: FulfillmentOrder, sessionTx?: unknown): Promise<void>;
   findById(id: string, sessionTx?: unknown): Promise<FulfillmentOrder | null>;
@@ -13,6 +14,9 @@ export interface FulfillmentOrderRepository {
 
 /** 生成任务扫描端口（跨域只读；SQL 位于适配器）。 */
 export interface FulfillmentScanPorts {
+  lockGroup?(groupId:string,tx:unknown):Promise<void>;
+  isRefundHeld?(orderId:string,tx?:unknown):Promise<boolean>;
+  recordBlocked(groupId: string, reason: 'ZERO_ALLOCATION' | 'INVALID_QUANTITY'): Promise<void>;
   listSuccessGroupIdsWithoutFulfillment(limit: number): Promise<string[]>;
   findGroupSnapshot(groupId: string): Promise<{ groupId: string; wholeQuantityText: string; unit: string } | null>;
   listPaidByGroup(groupId: string): Promise<Array<{

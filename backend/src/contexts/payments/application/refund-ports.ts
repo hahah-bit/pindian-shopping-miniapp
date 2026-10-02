@@ -4,7 +4,7 @@ import type { PaymentRepository, PaymentChannelPort } from './ports';
 
 export interface RefundRepositoryPort {
   insert(refund: Refund, sessionTx?: unknown): Promise<void>;
-  findByPaymentId(paymentId: string): Promise<Refund[]>;
+  findByPaymentId(paymentId: string, sessionTx?:unknown): Promise<Refund[]>;
   findById(refundId: string): Promise<Refund | null>;
   save(refund: Refund, sessionTx?: unknown): Promise<void>;
   findByOutRefundNo(outRefundNo: string): Promise<Refund | null>;

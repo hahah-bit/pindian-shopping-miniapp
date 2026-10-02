@@ -64,8 +64,8 @@ export class PostgresRefundRepository implements RefundRepositoryPort {
     ));
   }
 
-  async findByPaymentId(paymentId: string): Promise<Refund[]> {
-    return this.query(async (client) => {
+  async findByPaymentId(paymentId: string,sessionTx?:unknown): Promise<Refund[]> {
+    return this.queryIn(sessionTx,async (client) => {
       const { rows } = await client.query<RefundRow>(`SELECT ${COLUMNS} FROM refunds WHERE payment_id = $1 ORDER BY created_at ASC`, [paymentId]);
       return rows.map(refundOf);
     });

@@ -43,7 +43,7 @@ async function unwrap<T>(response: Response): Promise<T> {
   throw new ApiClientError(message, code, response.status, details);
 }
 
-async function request<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}, token?: string | null): Promise<T> {
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData) && init.body) headers.set('Content-Type', 'application/json');
   const activeToken = token === undefined ? storedToken() : token;

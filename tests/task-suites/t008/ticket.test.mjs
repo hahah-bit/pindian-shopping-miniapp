@@ -50,7 +50,7 @@ function makeTicket(status = 'open') {
 
 test('创建工单（异步）：入库 open + 初始 action', async () => {
   const repo = new FakeTicketRepository();
-  const useCase = new CreateTicketUseCase({ tickets: repo, runner: new InlineRunner(), clock: { now: () => NOW } });
+  const useCase = new CreateTicketUseCase({ tickets: repo, references: {assertOwned:async()=>{}}, runner: new InlineRunner(), clock: { now: () => NOW } });
   const result = await useCase.execute({ userId: USER, type: 'refund_issue', title: '退款问题', description: '描述', orderId: ORDER });
   assert.equal(result.ticket.state.status, 'open');
   assert.equal(repo.actions[0]?.action, 'create');
@@ -58,7 +58,7 @@ test('创建工单（异步）：入库 open + 初始 action', async () => {
 
 test('非法类型拒绝；标题/描述必填', async () => {
   const repo = new FakeTicketRepository();
-  const useCase = new CreateTicketUseCase({ tickets: repo, runner: new InlineRunner(), clock: { now: () => NOW } });
+  const useCase = new CreateTicketUseCase({ tickets: repo, references: {assertOwned:async()=>{}}, runner: new InlineRunner(), clock: { now: () => NOW } });
   await assert.rejects(() => useCase.execute({ userId: USER, type: 'hack', title: 't', description: 'd' }), (e) => e.code === 'VALIDATION_FAILED');
   await assert.rejects(() => useCase.execute({ userId: USER, type: 'other', title: '', description: 'd' }), (e) => e.code === 'VALIDATION_FAILED');
 });
@@ -76,8 +76,8 @@ test('状态机：open→processing→resolved；closed 可提前；resolved/clo
 test('open 直接关闭允许；重复关闭幂等', async () => {
   const repo = new FakeTicketRepository(makeTicket('open'));
   const useCase = new ProcessTicketUseCase({ tickets: repo, runner: new InlineRunner(), clock: { now: () => NOW } });
-  await useCase.execute({ ticketId: TID, action: 'close', adminId: ADMIN, detail: { reason: '重复提交' } });
-  await useCase.execute({ ticketId: TID, action: 'close', adminId: ADMIN, detail: { reason: '重复提交' } });
+  await useCase.execute({ ticketId: TID, action: 'close', adminId: ADMIN, isSupervisor:true, detail: { reason: '重复提交' } });
+  await useCase.execute({ ticketId: TID, action: 'close', adminId: ADMIN, isSupervisor:true, detail: { reason: '重复提交' } });
   assert.equal(repo.ticket.state.status, 'closed');
 });
 

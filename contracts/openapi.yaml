@@ -1146,7 +1146,7 @@ paths:
     post:
       operationId: shipFulfillmentOrder
       security: [{ bearerAuth: [] }]
-      summary: 发货/补发（整数克；Σ非补发 ≤ 分配；运单唯一；审计；order:manage）
+      summary: 正常发货（最小履约单位；数量守恒；isReissue:true 返回409 REVIEW_REQUIRED）
       parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
       requestBody:
         required: true
@@ -1156,10 +1156,10 @@ paths:
               type: object
               required: [quantityGrams, company, trackingNo]
               properties:
-                quantityGrams: { type: integer, minimum: 1, description: 本次寄发数量（克） }
+                quantityGrams: { type: integer, minimum: 1, description: 本次寄发数量（最小单位，重量为克、计数为商品单位） }
                 company: { type: string, maxLength: 30 }
                 trackingNo: { type: string, maxLength: 64 }
-                isReissue: { type: boolean, default: false, description: 补发（不计入发货进度） }
+                isReissue: { type: boolean, default: false, description: 兼容字段；true返回409 REVIEW_REQUIRED，补发请使用售后审批 }
                 reason: { type: string, maxLength: 200, description: 补发原因（isReissue 必填） }
       responses:
         '201':
@@ -1351,12 +1351,22 @@ paths:
         '200': { description: 已受理（幂等；重复通知返回同样成功；未知事件类型同样受理） }
         '400': { $ref: '#/components/responses/Error400' }
   /api/mini/v1/conversations:
+    get:
+      operationId: listMiniConversationHistory
+      summary: "本人会话历史分页，含结束会话"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"page","in":"query","schema":{"type":"integer","minimum":1}},{"name":"pageSize","in":"query","schema":{"type":"integer","minimum":1,"maximum":100}}]
+      responses:
+        '200': {"description":"本人会话历史分页，含结束会话","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"items":{"type":"array","items":{"$ref":"#/components/schemas/CsConversation"}},"total":{"type":"integer"},"page":{"type":"integer"},"pageSize":{"type":"integer"}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
     post:
       operationId: createMiniConversation
       security: [{ bearerAuth: [] }]
       summary: 发起/恢复会话（已有未结束会话幂等返回；无客服在线=留言语义）
       responses:
-        '200':
+        '201':
           description: 会话视图
           content:
             application/json:
@@ -1416,7 +1426,7 @@ paths:
                   requestId: { type: string }
                   data:
                     type: object
-                    required: [messages, lastSeq]
+                    required: [messages, lastSeq, nextSeq]
                     properties:
                       messages:
                         type: array
@@ -1429,7 +1439,8 @@ paths:
                             kind: { type: string, enum: [text, image, card] }
                             content: { type: object }
                             createdAt: { type: string, format: date-time }
-                      lastSeq: { type: integer }
+                      lastSeq: { type: integer, description: 会话水位 }
+                      nextSeq: { type: integer, description: 本页已返回消息游标 }
         '401': { $ref: '#/components/responses/Error401' }
         '404': { $ref: '#/components/responses/Error404' }
     post:
@@ -1522,6 +1533,7 @@ paths:
                 title: { type: string, maxLength: 60 }
                 description: { type: string, maxLength: 2000 }
                 orderId: { type: string, format: uuid }
+                clientTicketId: { type: string, minLength: 1, maxLength: 64, description: 本用户范围幂等键 }
       responses:
         '201': { description: 已创建（open） }
         '400': { $ref: '#/components/responses/Error400' }
@@ -1560,10 +1572,11 @@ paths:
               type: object
               required: [satisfied]
               properties:
+                clientActionId: { type: string, minLength: 1, maxLength: 64, description: 工单与发送者范围幂等键 }
                 satisfied: { type: boolean }
-                text: { type: string, maxLength: 1000 }
+                text: { type: string, maxLength: 2000 }
       responses:
-        '200': { description: 已记录（幂等） }
+        '200': { description: 已记录；同 clientActionId 幂等，异内容409 }
         '401': { $ref: '#/components/responses/Error401' }
         '404': { $ref: '#/components/responses/Error404' }
   /api/admin/v1/cs/queue:
@@ -1697,7 +1710,7 @@ paths:
       security: [{ bearerAuth: [] }]
       summary: 工单分页（agent:manage）
       parameters:
-        - { name: status, in: query, schema: { type: string, enum: [open, processing, resolved, closed] } }
+        - { name: status, in: query, schema: { type: string, enum: [open, processing, waiting_feedback, resolved, closed] } }
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
         - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
       responses:
@@ -1740,33 +1753,14 @@ paths:
               type: object
               required: [text]
               properties:
+                clientActionId: { type: string, minLength: 1, maxLength: 64, description: 工单与发送者范围幂等键 }
                 text: { type: string, maxLength: 2000 }
       responses:
         '200': { description: 已回复 }
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
         '409': { $ref: '#/components/responses/Error409' }
-  /api/admin/v1/after-sales/tickets/{id}/refund:
-    post:
-      operationId: refundAdminTicket
-      security: [{ bearerAuth: [] }]
-      summary: 发起全额退款（processing 才可；经支付域公开用例校验资格与额度；失败 409 且无 action；审计）
-      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [orderId]
-              properties:
-                orderId: { type: string, format: uuid }
-      responses:
-        '200': { description: 退款已创建 }
-        '401': { $ref: '#/components/responses/Error401' }
-        '403': { $ref: '#/components/responses/Error403' }
-        '404': { $ref: '#/components/responses/Error404' }
-        '409': { $ref: '#/components/responses/Error409' }
+  /api/admin/v1/after-sales/tickets/{id}/refund: {"post":{"operationId":"requestReviewedRefund","summary":"客服提交实付全额退款申请，审批后执行（agent:manage、工单归属）","security":[{"bearerAuth":[]}],"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["orderId","reason","clientRequestId"],"properties":{"orderId":{"type":"string","format":"uuid"},"reason":{"type":"string","minLength":1,"maxLength":1000},"clientRequestId":{"type":"string","minLength":1,"maxLength":64}}}}}},"responses":{"202":{"description":"待审核申请已保存","content":{"application/json":{"schema":{"type":"object","required":["data","requestId"],"properties":{"data":{"type":"object","required":["request"],"properties":{"request":{"$ref":"#/components/schemas/AfterSalesActionRequest"}}},"requestId":{"type":"string"}}}}}},"400":{"description":"请求或权限错误"},"401":{"description":"请求或权限错误"},"403":{"description":"请求或权限错误"},"404":{"description":"请求或权限错误"},"409":{"description":"请求或权限错误"}}}}
   /api/admin/v1/after-sales/tickets/{id}/resolve:
     post:
       operationId: resolveAdminTicket
@@ -1779,6 +1773,7 @@ paths:
             schema:
               type: object
               properties:
+                clientActionId: { type: string, minLength: 1, maxLength: 64, description: 工单与发送者范围幂等键 }
                 reply: { type: string, maxLength: 2000 }
       responses:
         '200': { description: 已解决 }
@@ -1797,11 +1792,192 @@ paths:
             schema:
               type: object
               properties:
+                clientActionId: { type: string, minLength: 1, maxLength: 64, description: 工单与发送者范围幂等键 }
                 reason: { type: string, maxLength: 200 }
       responses:
         '200': { description: 已关闭 }
         '401': { $ref: '#/components/responses/Error401' }
         '403': { $ref: '#/components/responses/Error403' }
+  /api/mini/v1/conversations/{id}:
+    get:
+      operationId: getMiniConversation
+      summary: "本人的单一会话（历史可读）"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      responses:
+        '200': {"description":"本人的单一会话（历史可读）","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"conversation":{"$ref":"#/components/schemas/CsConversation"}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/cs/conversations/{id}:
+    get:
+      operationId: getCsConversation
+      summary: "负责客服的单一会话（历史可读）"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      responses:
+        '200': {"description":"负责客服的单一会话（历史可读）","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"conversation":{"$ref":"#/components/schemas/CsConversation"}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/conversations/{id}/read:
+    post:
+      operationId: ackMiniConversation
+      summary: "本人可见消息读确认，仅递增"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      requestBody: {"required":true,"content":{"application/json":{"schema":{"type":"object","required":["seq"],"properties":{"seq":{"type":"integer","minimum":0}}}}}}
+      responses:
+        '200': {"description":"本人可见消息读确认，仅递增","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"ok":{"type":"boolean"}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/conversations/{id}/images:
+    post:
+      operationId: uploadMiniChatImage
+      summary: "私有会话图片，5MiB以内，60至6000像素，校验实际类型"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      requestBody: {"required":true,"content":{"multipart/form-data":{"schema":{"type":"object","required":["file"],"properties":{"file":{"type":"string","format":"binary"}}}}}}
+      responses:
+        '201': {"description":"私有会话图片，5MiB以内，60至6000像素，校验实际类型","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"$ref":"#/components/schemas/CsImage"},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/cards/options/{kind}:
+    get:
+      operationId: listMiniCardOptions
+      summary: "授权业务卡片候选，最多最近50条"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"kind","in":"path","required":true,"schema":{"type":"string","enum":["product","order","group","refund"]}}]
+      responses:
+        '200': {"description":"授权业务卡片候选，最多最近50条","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"items":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string","format":"uuid"},"label":{"type":"string"}}}}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/cs/conversations/{id}/images:
+    post:
+      operationId: uploadCsChatImage
+      summary: "私有会话图片，5MiB以内，60至6000像素，校验实际类型"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      requestBody: {"required":true,"content":{"multipart/form-data":{"schema":{"type":"object","required":["file"],"properties":{"file":{"type":"string","format":"binary"}}}}}}
+      responses:
+        '201': {"description":"私有会话图片，5MiB以内，60至6000像素，校验实际类型","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"$ref":"#/components/schemas/CsImage"},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/cs/conversations/{id}/card-options/{kind}:
+    get:
+      operationId: listCsCardOptions
+      summary: "授权业务卡片候选，最多最近50条"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"kind","in":"path","required":true,"schema":{"type":"string","enum":["product","order","group","refund"]}}]
+      responses:
+        '200': {"description":"授权业务卡片候选，最多最近50条","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"items":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string","format":"uuid"},"label":{"type":"string"}}}}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/mini/v1/chat-images/{id}:
+    get:
+      operationId: readMiniChatImage
+      summary: 本人或原负责客服下载私有原图，无公开访问
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      responses:
+        '200': { description: 私有原图，Cache-Control private no-store，nosniff, content: { 'image/png': { schema: { type: string, format: binary } }, 'image/jpeg': { schema: { type: string, format: binary } }, 'image/webp': { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/Error404' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/admin/v1/cs/images/{id}:
+    get:
+      operationId: readCsChatImage
+      summary: 本人或原负责客服下载私有原图，无公开访问
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      responses:
+        '200': { description: 私有原图，Cache-Control private no-store，nosniff, content: { 'image/png': { schema: { type: string, format: binary } }, 'image/jpeg': { schema: { type: string, format: binary } }, 'image/webp': { schema: { type: string, format: binary } } } }
+        '404': { $ref: '#/components/responses/Error404' }
+        '401': { $ref: '#/components/responses/Error401' }
+  /api/admin/v1/cs/conversations/{id}/cards/{kind}/{ref}:
+    get:
+      operationId: getCsBusinessCard
+      summary: "负责客服读取接待用户授权的卡片投影"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"kind","in":"path","required":true,"schema":{"type":"string","enum":["product","order","group","refund"]}},{"name":"ref","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      responses:
+        '200': {"description":"负责客服读取接待用户授权的卡片投影","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/cs/agents:
+    get:
+      operationId: listOnlineCsAgents
+      summary: "启用、在线且具有客服角色的候选人"
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': {"description":"启用、在线且具有客服角色的候选人","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"items":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string","format":"uuid"},"displayName":{"type":"string"},"activeCount":{"type":"integer"}}}}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/after-sales/tickets/{id}/request-feedback:
+    post:
+      operationId: requestTicketFeedback
+      summary: "负责客服或主管请求反馈，进入 waiting_feedback"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      requestBody: {"required":true,"content":{"application/json":{"schema":{"type":"object","required":["text"],"properties":{"text":{"type":"string","minLength":1,"maxLength":2000},"clientActionId":{"type":"string","minLength":1,"maxLength":64}}}}}}
+      responses:
+        '200': {"description":"负责客服或主管请求反馈，进入 waiting_feedback","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"ticket":{"type":"object","properties":{"id":{"type":"string","format":"uuid"},"status":{"type":"string","enum":["waiting_feedback"]}}}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/cs/accounts:
+    get:
+      operationId: listCsAccounts
+      summary: "超级管理员读取客服账号（不返回密码）"
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': {"description":"超级管理员读取客服账号（不返回密码）","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"items":{"type":"array","items":{"$ref":"#/components/schemas/CsAccount"}}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+    post:
+      operationId: createCsAccount
+      summary: "超级管理员创建客服或主管账号"
+      security: [{ bearerAuth: [] }]
+      requestBody: {"required":true,"content":{"application/json":{"schema":{"type":"object","required":["username","displayName","password","role"],"properties":{"username":{"type":"string"},"displayName":{"type":"string"},"password":{"type":"string","minLength":10,"maxLength":128,"writeOnly":true},"role":{"type":"string","enum":["cs_agent","cs_supervisor"]}}}}}}
+      responses:
+        '201': {"description":"超级管理员创建客服或主管账号","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"$ref":"#/components/schemas/CsAccount"},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/cs/accounts/{id}/status:
+    post:
+      operationId: updateCsAccountStatus
+      summary: "超级管理员启停客服账号，停用撤销全部旧会话"
+      security: [{ bearerAuth: [] }]
+      parameters: [{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}]
+      requestBody: {"required":true,"content":{"application/json":{"schema":{"type":"object","required":["status"],"properties":{"status":{"type":"string","enum":["active","disabled"]}}}}}}
+      responses:
+        '201': {"description":"超级管理员启停客服账号，停用撤销全部旧会话","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"$ref":"#/components/schemas/CsAccount"},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/fulfillment/blocks:
+    get:
+      operationId: listFulfillmentBlocks
+      summary: "order:manage读取暂停履约异常组及订单引用，最多100条"
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': {"description":"order:manage读取暂停履约异常组及订单引用，最多100条","content":{"application/json":{"schema":{"type":"object","properties":{"data":{"type":"object","properties":{"items":{"type":"array","items":{"type":"object","properties":{"groupId":{"type":"string","format":"uuid"},"reason":{"type":"string","enum":["ZERO_ALLOCATION","INVALID_QUANTITY"]},"createdAt":{"type":"string","format":"date-time"},"orderIds":{"type":"array","items":{"type":"string","format":"uuid"}}}}}}},"requestId":{"type":"string"}}}}}}
+        '400': { $ref: '#/components/responses/Error400' }
+        '401': { $ref: '#/components/responses/Error401' }
+        '404': { $ref: '#/components/responses/Error404' }
+  /api/admin/v1/after-sales/tickets/{id}/reshipment: {"post":{"operationId":"requestReviewedReshipment","summary":"客服提交补发申请，审批后执行（agent:manage、工单归属）","security":[{"bearerAuth":[]}],"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["orderId","reason","clientRequestId","fulfillmentId","quantityGrams","company","trackingNo"],"properties":{"orderId":{"type":"string","format":"uuid"},"reason":{"type":"string","minLength":1,"maxLength":200},"clientRequestId":{"type":"string","minLength":1,"maxLength":64},"fulfillmentId":{"type":"string","format":"uuid"},"quantityGrams":{"type":"integer","minimum":1,"maximum":2147483647,"description":"最小履约单位：重量为克，计数为商品单位"},"company":{"type":"string","minLength":1,"maxLength":30},"trackingNo":{"type":"string","minLength":1,"maxLength":64}}}}}},"responses":{"202":{"description":"待审核申请已保存","content":{"application/json":{"schema":{"type":"object","required":["data","requestId"],"properties":{"data":{"type":"object","required":["request"],"properties":{"request":{"$ref":"#/components/schemas/AfterSalesActionRequest"}}},"requestId":{"type":"string"}}}}}},"400":{"description":"请求或权限错误"},"401":{"description":"请求或权限错误"},"403":{"description":"请求或权限错误"},"404":{"description":"请求或权限错误"},"409":{"description":"请求或权限错误"}}}}
+  /api/admin/v1/after-sales/tickets/{id}/requests: {"get":{"operationId":"listTicketApprovals","summary":"工单归属范围内查看申请","security":[{"bearerAuth":[]}],"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"成功","content":{"application/json":{"schema":{"type":"object","required":["data","requestId"],"properties":{"data":{"type":"object","properties":{"items":{"type":"array","items":{"$ref":"#/components/schemas/AfterSalesActionRequest"}}}},"requestId":{"type":"string"}}}}}},"400":{"description":"请求或权限错误"},"401":{"description":"请求或权限错误"},"403":{"description":"请求或权限错误"},"404":{"description":"请求或权限错误"},"409":{"description":"请求或权限错误"}}}}
+  /api/admin/v1/after-sales/tickets/{id}/fulfillment: {"get":{"operationId":"getTicketFulfillmentSummary","summary":"工单归属范围内履约摘要，不返回地址","security":[{"bearerAuth":[]}],"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"成功","content":{"application/json":{"schema":{"type":"object","required":["data","requestId"],"properties":{"data":{"type":"object","properties":{"fulfillment":{"type":"object","nullable":true,"properties":{"id":{"type":"string","format":"uuid"},"unit":{"type":"string"},"status":{"type":"string"},"allocatedQuantityGrams":{"type":"integer"},"shippedQuantityGrams":{"type":"integer"},"refundHeld":{"type":"boolean"}}}}},"requestId":{"type":"string"}}}}}},"400":{"description":"请求或权限错误"},"401":{"description":"请求或权限错误"},"403":{"description":"请求或权限错误"},"404":{"description":"请求或权限错误"},"409":{"description":"请求或权限错误"}}}}
+  /api/admin/v1/after-sales/requests/{id}/review: {"post":{"operationId":"reviewAfterSalesRequest","summary":"仅超级管理员审核，重复同决定同原因返回原结果；执行/action/审计同事务","security":[{"bearerAuth":[]}],"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["decision","reason"],"properties":{"decision":{"type":"string","enum":["approve","reject"]},"reason":{"type":"string","minLength":1,"maxLength":1000}}}}}},"responses":{"200":{"description":"成功","content":{"application/json":{"schema":{"type":"object","required":["data","requestId"],"properties":{"data":{"type":"object","required":["request"],"properties":{"request":{"$ref":"#/components/schemas/AfterSalesActionRequest"}}},"requestId":{"type":"string"}}}}}},"400":{"description":"请求或权限错误"},"401":{"description":"请求或权限错误"},"403":{"description":"请求或权限错误"},"404":{"description":"请求或权限错误"},"409":{"description":"请求或权限错误"}}}}
+  /api/admin/v1/fulfillment/blocks/{groupId}/orders/{orderId}/refund-request: {"post":{"operationId":"requestAnomalyRefund","summary":"真实零分配异常订单创建工单与待审核全额退款申请","security":[{"bearerAuth":[]}],"parameters":[{"name":"groupId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"orderId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["reason","clientRequestId"],"properties":{"reason":{"type":"string","minLength":1,"maxLength":1000},"clientRequestId":{"type":"string","minLength":1,"maxLength":64}}}}}},"responses":{"202":{"description":"待审核申请已保存","content":{"application/json":{"schema":{"type":"object","required":["data","requestId"],"properties":{"data":{"type":"object","required":["request"],"properties":{"request":{"$ref":"#/components/schemas/AfterSalesActionRequest"}}},"requestId":{"type":"string"}}}}}},"400":{"description":"请求或权限错误"},"401":{"description":"请求或权限错误"},"403":{"description":"请求或权限错误"},"404":{"description":"请求或权限错误"},"409":{"description":"请求或权限错误"}}}}
 components:
   securitySchemes:
     bearerAuth:
@@ -1909,6 +2085,7 @@ components:
               requestId: { type: string }
               data: { $ref: '#/components/schemas/AddressView' }
   schemas:
+    AfterSalesActionRequest: {"type":"object","required":["id","ticketId","orderId","kind","status","reason","payload","createdAt"],"properties":{"id":{"type":"string","format":"uuid"},"ticketId":{"type":"string","format":"uuid"},"orderId":{"type":"string","format":"uuid"},"kind":{"type":"string","enum":["refund","reshipment"]},"status":{"type":"string","enum":["pending","executed","rejected"]},"reason":{"type":"string","minLength":1,"maxLength":1000},"payload":{"type":"object"},"amountFen":{"type":"integer","nullable":true,"description":"退款为实付全额分，补发为null"},"reviewReason":{"type":"string","nullable":true},"resultId":{"type":"string","format":"uuid","nullable":true},"createdAt":{"type":"string","format":"date-time"},"reviewedAt":{"type":"string","format":"date-time","nullable":true},"requesterId":{"type":"string","format":"uuid"},"reviewerId":{"type":"string","format":"uuid","nullable":true}},"description":"用户工单详情 requests 不包含 requesterId/reviewerId；executed 表示退款请求或补发包裹已创建，不能表示退款到账"}
     PlatformInfo:
       type: object
       required: [name, stage, backend, database, contexts, businessReady]
@@ -1956,10 +2133,10 @@ components:
         id: { type: string, format: uuid }
         username: { type: string }
         displayName: { type: string }
-        role: { type: string, enum: [super_admin] }
+        role: { type: string, enum: [super_admin, catalog_admin, cs_agent, cs_supervisor] }
         permissions:
           type: array
-          items: { type: string, enum: [catalog:manage, inventory:manage, media:manage, admin:manage] }
+          items: { type: string, enum: [catalog:manage, inventory:manage, media:manage, admin:manage, user:manage, order:manage, agent:manage, agent:supervise] }
     LoginResponse:
       type: object
       required: [token, expiresAt, admin]
@@ -2281,7 +2458,7 @@ components:
         id: { type: string, format: uuid }
         status: { type: string, enum: [requested, submitted, processing, succeeded, failed] }
         amountFen: { type: integer }
-        reason: { type: string, enum: [user_cancel, group_failed, late_payment] }
+        reason: { type: string, enum: [user_cancel, group_failed, late_payment, after_sales] }
         createdAtText: { type: string, format: date-time }
     AdminOrderListItem:
       type: object
@@ -2326,7 +2503,7 @@ components:
         nickname: { type: string }
         amountFen: { type: integer }
         status: { type: string, enum: [requested, submitted, processing, succeeded, failed] }
-        reason: { type: string, enum: [user_cancel, group_failed, late_payment] }
+        reason: { type: string, enum: [user_cancel, group_failed, late_payment, after_sales] }
         retryCount: { type: integer }
         failReason: { type: string }
         createdAt: { type: string, format: date-time }
@@ -2419,3 +2596,9 @@ components:
               company: { type: string }
               trackingNo: { type: string }
               shippedAt: { type: string, format: date-time }
+
+    CsConversation: {"type":"object","properties":{"id":{"type":"string","format":"uuid"},"status":{"type":"string","enum":["queued","active","ended","converted"]},"hasAgent":{"type":"boolean"}}}
+
+    CsImage: {"type":"object","properties":{"id":{"type":"string","format":"uuid"},"width":{"type":"integer"},"height":{"type":"integer"}}}
+
+    CsAccount: {"type":"object","properties":{"id":{"type":"string","format":"uuid"},"username":{"type":"string"},"displayName":{"type":"string"},"role":{"type":"string","enum":["cs_agent","cs_supervisor"]},"status":{"type":"string","enum":["active","disabled"]}}}
