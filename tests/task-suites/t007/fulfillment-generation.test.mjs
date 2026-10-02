@@ -149,3 +149,17 @@ test('R01 单位：未知单位组跳过（不静默换算、不阻塞其他组�
   assert.equal(groups, 0, '未知单位拒绝生成');
   assert.equal(repo.inserted.length, 0);
 });
+
+
+// ---- 2026-10-02 复验 P1：计数商品零分配（总量 < 订单数）→ 拒绝生成 + 留痕 ----
+
+test('计数零分配：1 个 × 两笔 30 份额 → 整组拒绝生成（不部分生成、不超发）', async () => {
+  const groupsRepo = new FakeGroups(['gggggggg-4444-4444-8444-444444444006']);
+  groupsRepo.snapshots['gggggggg-4444-4444-8444-444444444006'] = { wholeQuantityText: '1', unit: '个' };
+  const twoOrders = paidOrders.slice(0, 2).map((o) => ({ ...o, units: 30 }));
+  const { task, repo } = build({ groups: groupsRepo, ordersByGroup: { 'gggggggg-4444-4444-8444-444444444006': twoOrders } });
+  const groups = await task.execute({ limit: 10 });
+  assert.equal(groups, 0, '零分配组整组拒绝');
+  assert.equal(repo.inserted.length, 0, '不部分生成（不静默删除用户履约）');
+  // 已有成功组不受影响（无删除动作）——由真实 PG 集成验证整组恢复
+});

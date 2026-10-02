@@ -36,20 +36,47 @@ export interface MinimalUnits {
   kind: 'weight' | 'countable';
 }
 
-/** 快照数量文本 + 单位 → 最小履约单位数；不可履约（未知单位/非整数换算/非正数）返回 null。 */
+/** 每最小单位对应的最大小数位（换算比例的 10 进制分母位数）。 */
+const SCALE_LIMIT = 9;
+
+/** 数量上限（最小单位数）——防溢出/脏数据；正常商品远低于此。 */
+export const MAX_QUANTITY_UNITS = 1_000_000_000;
+
+/**
+ * 十进制文本 → 整数（scale 位小数）：纯字符串/整数运算，不经过浮点乘法。
+ * '1.001' → { mantissa: 1001n, scale: 3 }；非法格式返回 null。
+ */
+function parseDecimalText(text: string): { mantissa: bigint; scale: number } | null {
+  const match = /^(\d+)(?:\.(\d{1,10}))?$/.exec(text.trim());
+  if (!match) return null;
+  const intPart = match[1] ?? '0';
+  const fracPart = match[2] ?? '';
+  if (intPart.length + fracPart.length > 18) return null;
+  return { mantissa: BigInt(intPart + fracPart || '0'), scale: fracPart.length };
+}
+
+/** 快照数量文本 + 单位 → 最小履约单位数；不可履约（未知单位/非整数换算/非正数/超上限）返回 null。
+ *  2026-10-02 复验 P1：使用十进制文本与整数运算，禁止浮点误差拒绝合法数量（如 1.001kg）。 */
 export function toMinimalUnits(wholeQuantityText: string, unit: string): MinimalUnits | null {
-  const value = Number(wholeQuantityText);
-  if (!Number.isFinite(value) || value <= 0) return null;
+  const parsed = parseDecimalText(wholeQuantityText ?? '');
+  if (!parsed) return null;
   const normalizedUnit = (unit ?? '').trim();
   const gramsPerUnit = WEIGHT_UNITS_TO_GRAMS[normalizedUnit];
   if (gramsPerUnit !== undefined) {
-    const units = value * gramsPerUnit;
-    if (!Number.isInteger(units) || units <= 0) return null;
-    return { units, kind: 'weight' };
+    // units = mantissa × gramsPerUnit / 10^scale（整数运算；除不尽 → 非整数数量拒绝）
+    const scale = Math.min(parsed.scale, SCALE_LIMIT);
+    const product = parsed.mantissa * BigInt(gramsPerUnit);
+    const divisor = 10n ** BigInt(parsed.scale);
+    if (product % divisor !== 0n) return null;
+    const units = product / divisor;
+    if (units <= 0n || units > BigInt(MAX_QUANTITY_UNITS)) return null;
+    return { units: Number(units), kind: 'weight' };
   }
   if (COUNTABLE_UNITS.has(normalizedUnit)) {
-    if (!Number.isInteger(value) || value <= 0) return null;
-    return { units: value, kind: 'countable' };
+    if (parsed.scale > 0) return null; // 计数数量必须整数
+    const units = parsed.mantissa;
+    if (units <= 0n || units > BigInt(MAX_QUANTITY_UNITS)) return null;
+    return { units: Number(units), kind: 'countable' };
   }
   return null;
 }

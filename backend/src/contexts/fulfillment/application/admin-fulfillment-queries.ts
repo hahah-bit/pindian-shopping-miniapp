@@ -22,6 +22,8 @@ export interface AdminFulfillmentDetail {
   allocatedQuantityGrams: number;
   allocatedQuantityText: string;
   unit: string;
+  /** 数量字段单位语义（D011）：weight=克、countable=件（*Grams 字段复用为最小履约单位数）。 */
+  quantityType: 'weight' | 'countable';
   status: string;
   receiver: { name: string; /** 仅 unmasked 选项（导出）携带原文；普通响应不含明文字段 */ phone?: string; phoneMasked: string; province: string; city: string; district: string; detail: string; version: number };
   shipments: Array<{ id: string; quantityGrams: number; quantityText: string; isReissue: boolean; reissueReason: string | null; company: string; trackingNo: string; shippedAt: string }>;
@@ -118,6 +120,7 @@ export class AdminFulfillmentQueries {
         [groupId]
       );
       const unitText = rows[0]?.unit ?? '';
+      const quantityType = QUANTIFIER_KIND(rows[0]?.unit ?? '');
       const shipmentsByFid = new Map<string, AdminFulfillmentDetail['shipments']>();
       for (const row of shipmentRows) {
         const list = shipmentsByFid.get(row.fulfillment_order_id) ?? [];
@@ -145,6 +148,7 @@ export class AdminFulfillmentQueries {
           allocatedQuantityGrams: row.allocated_quantity_grams,
           allocatedQuantityText: formatQuantity(row.allocated_quantity_grams, unitText),
           unit: row.unit,
+          quantityType,
           status: row.status,
           receiver: {
             name: row.receiver_name,
@@ -194,4 +198,11 @@ function maskPhoneOf(phone: string): string {
   if (/^1[3-9]\d{9}$/.test(phone)) return `${phone.slice(0, 3)}****${phone.slice(7)}`;
   if (phone.length >= 4) return `****${phone.slice(-4)}`;
   return '****';
+}
+
+/** 数量字段单位语义（D011）：weight=最小单位为克；countable=最小单位为件。 */
+export function QUANTIFIER_KIND(unit: string): 'weight' | 'countable' {
+  const normalized = (unit ?? '').trim();
+  if (normalized in { '斤': 1, '千克': 1, 'kg': 1, '克': 1, 'g': 1, '两': 1 }) return 'weight';
+  return 'countable';
 }

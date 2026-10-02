@@ -105,6 +105,15 @@ async function markComplete(item: AdminFulfillmentDetail) {
   }
 }
 
+/** 数量字段单位语义（D011）：weight=克、countable=件（*Grams 字段复用为最小履约单位数）。 */
+function quantityTypeOf(item: AdminFulfillmentDetail): 'weight' | 'countable' {
+  return ['斤', '千克', 'kg', '克', 'g', '两'].includes(item.unit.trim()) ? 'weight' : 'countable';
+}
+
+function quantityLabel(item: AdminFulfillmentDetail): string {
+  return quantityTypeOf(item) === 'weight' ? '克' : item.unit.trim() || '件';
+}
+
 function openShip(item: AdminFulfillmentDetail) {
   shipTarget.value = item;
   shipForm.value = { quantityGrams: String(item.allocatedQuantityGrams - sumShipped(item)), company: '', trackingNo: '', isReissue: false, reason: '' };
@@ -248,17 +257,17 @@ onMounted(() => load(1));
     <dl class="detail-grid">
       <div><dt>收货人</dt><dd>{{ shipTarget.receiver.name }} {{ shipTarget.receiver.phoneMasked }}</dd></div>
       <div><dt>地址</dt><dd>{{ shipTarget.receiver.province }}{{ shipTarget.receiver.city }}{{ shipTarget.receiver.district }} {{ shipTarget.receiver.detail }}</dd></div>
-      <div><dt>已发货</dt><dd>{{ sumShipped(shipTarget) }} g / {{ shipTarget.allocatedQuantityGrams }} g</dd></div>
+      <div><dt>已发货</dt><dd>{{ sumShipped(shipTarget) }} {{ quantityLabel(shipTarget) }} / {{ shipTarget.allocatedQuantityGrams }} {{ quantityLabel(shipTarget) }}（应发 {{ shipTarget.allocatedQuantityText }} {{ shipTarget.unit }}）</dd></div>
     </dl>
     <div class="controls" style="flex-wrap: wrap; gap: 8px">
-      <input v-model="shipForm.quantityGrams" placeholder="本次数量（克）" aria-label="发货数量（克）" style="width: 140px" />
+      <input v-model="shipForm.quantityGrams" :placeholder="`本次数量（${quantityLabel(shipTarget)}）`" :aria-label="`发货数量（${quantityLabel(shipTarget)}）`" style="width: 140px" />
       <input v-model="shipForm.company" placeholder="快递公司" aria-label="快递公司" style="width: 120px" />
       <input v-model="shipForm.trackingNo" placeholder="运单号" aria-label="运单号" style="width: 180px" />
       <label style="display: flex; align-items: center; gap: 4px"><input v-model="shipForm.isReissue" type="checkbox" />补发</label>
       <input v-if="shipForm.isReissue" v-model="shipForm.reason" placeholder="补发原因（必填）" aria-label="补发原因" style="width: 180px" />
       <button type="button" class="primary" :disabled="shipping" @click="confirmShip">{{ shipping ? '提交中…' : '确认发货' }}</button>
     </div>
-    <p class="hint">非补发发货计入进度：Σ数量 = 分配数量即全部发货；补发仅记录轨迹，不改变进度。运单号全局唯一。</p>
+    <p class="hint">非补发发货计入进度：Σ数量 = 分配数量即全部发货；补发仅记录轨迹，不改变进度。运单号全局唯一。数量单位按商品：重量商品为**克**、计数商品为**{{ shipTarget.unit }}**（件数）。</p>
   </div>
 
   <div v-if="receiverTarget" class="detail-panel">

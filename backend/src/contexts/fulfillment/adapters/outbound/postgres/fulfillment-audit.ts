@@ -29,11 +29,7 @@ export class TransactionalFulfillmentAudit {
       await withExecutor(sessionTx as PgExecutor, async (client) => write(client));
       return;
     }
-    try {
-      await withExecutor(this.pool, async (client) => write(client));
-    } catch (error) {
-      // 事务外旁路审计（导出）：失败不阻断主流程，仅告警
-      console.error('[fulfillment-audit] 旁路审计写入失败', entry.action, error instanceof Error ? error.message : error);
-    }
+    // 事务外旁路审计（导出明文）：失败必须向上抛——调用方阻断无留痕导出（2026-10-02 复验 P2）
+    await withExecutor(this.pool, async (client) => write(client));
   }
 }

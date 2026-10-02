@@ -485,6 +485,8 @@ export interface AdminFulfillmentDetail {
   allocatedQuantityGrams: number;
   allocatedQuantityText: string;
   unit: string;
+  /** 数量字段单位语义（D011）：weight=最小单位为克；countable=最小单位为件（*Grams 字段复用）。 */
+  quantityType: 'weight' | 'countable';
   status: FulfillmentStatus;
   receiver: { name: string; phoneMasked: string; province: string; city: string; district: string; detail: string; version: number };
   shipments: AdminShipmentView[];

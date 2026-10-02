@@ -56,6 +56,12 @@ export class FulfillmentGenerationTask {
       console.error('[fulfillment-gen] 成功组无 paid 订单，跳过', groupId);
       return 0;
     }
+    // 2026-10-02 复验 P1：计数商品总量 < 订单数（产生零分配）→ 不可拆分配置，
+    // 整组拒绝生成并留痕（人工修正数量后重扫恢复）；不部分生成、不超发、不删已有履约。
+    if (totalGrams < paidOrders.length) {
+      console.error('[fulfillment-gen] 整件最小单位数小于订单数（将产生零分配），拒绝生成', groupId, { totalUnits: totalGrams, orders: paidOrders.length });
+      return 0;
+    }
     const allocations = allocateQuantity(totalGrams, paidOrders.map((o) => ({ orderId: o.orderId, units: o.units })));
     const gramsByOrder = new Map(allocations.map((a) => [a.orderId, a.grams]));
     const now = this.deps.clock.now();

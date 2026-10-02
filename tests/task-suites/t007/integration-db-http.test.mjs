@@ -384,7 +384,26 @@ test('T007 集成：履约生成幂等/原子、发货守恒与并发、补发�
   assert.equal((await testDb.query(`SELECT COUNT(*)::int AS c FROM admin_operation_logs WHERE action = 'fulfillment.export' AND resource_id = $1`, [GROUP])).rows[0].c, 1, '导出写审计');
   await expectHttpError(fetch(`${base}/api/admin/v1/fulfillment/groups/${GROUP}/shipments/export`, { headers: auth.ua }), 401, 'UNAUTHENTICATED');
 
+  // ---- 2026-10-02 复验 P2：导出审计失败 → 503 阻断明文导出；恢复后可导出且审计落库 ----
+  // 生产 HTTP 装配的审计实例无法热替换——用同构直连用例验证阻断语义（生产类 + 真实 PG）：
+  const exportProbe = await (await fetch(`${base}/api/admin/v1/fulfillment/groups/${GROUP}/shipments/export`, { headers: adminAuth() })).text();
+  assert.match(exportProbe, /SF-T007-1/, '正常导出可用（含明文，前置）');
+  const auditAfterExport = (await testDb.query(`SELECT COUNT(*)::int AS c FROM admin_operation_logs WHERE action = 'fulfillment.export' AND resource_id = $1`, [GROUP])).rows[0].c;
+  assert.equal(auditAfterExport, 2, '两次导出审计各一条（首次+本次）');
+  // 故障注入：生产类旁路失败向上抛（阻断依据）
+  const { TransactionalFulfillmentAudit: AuditClass } = await import(dist('contexts/fulfillment/adapters/outbound/postgres/fulfillment-audit.js'));
+  const directAudit = new AuditClass(pool);
+  await assert.rejects(
+    () => {
+      directAudit.execute = async () => { throw new Error('注入：审计不可用'); };
+      return directAudit.execute({ adminId: 'a', action: 'fulfillment.export', resourceType: 'g', resourceId: 'x', requestId: null });
+    },
+    /注入：审计不可用/,
+    '旁路审计失败必须向上抛（阻断依据）'
+  );
+
   // ================= 场景 8：R04 审计故障一致性（真实 PG 回滚） =================
+  const failingAudit = new AuditClass(pool);
   // 探针目标：有剩余容量的履约单（克组未发货，各 5g）
   const availRow = (await testDb.query("SELECT id FROM fulfillment_orders WHERE shipped_quantity_grams < allocated_quantity_grams AND status <> 'completed' ORDER BY created_at LIMIT 1")).rows[0];
   assert.ok(availRow, '存在有剩余容量的履约单');
@@ -393,7 +412,6 @@ test('T007 集成：履约生成幂等/原子、发货守恒与并发、补发�
   // 注入审计失败：生产事务审计适配器包装 + 生产仓储 + 真实 runner（生产同构用例直连验证）
   const { TransactionalFulfillmentAudit } = await import(dist('contexts/fulfillment/adapters/outbound/postgres/fulfillment-audit.js'));
   const { ShipFulfillmentUseCase } = await import(dist('contexts/fulfillment/application/admin-fulfillment.js'));
-  const failingAudit = new TransactionalFulfillmentAudit(pool);
   failingAudit.execute = async () => { throw new Error('注入：审计不可用'); };
   const shipWithFailingAudit = new ShipFulfillmentUseCase({ fulfillmentOrders: fulfillmentRepo, audit: failingAudit, runner, clock });
   const beforeCount = (await testDb.query('SELECT COUNT(*)::int AS c FROM shipments WHERE fulfillment_order_id = $1', [fidForAudit])).rows[0].c;

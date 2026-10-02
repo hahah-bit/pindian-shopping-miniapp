@@ -6,6 +6,8 @@ import { RequirePermissions } from '../../../../identity-access/adapters/inbound
 import { ShipFulfillmentUseCase, UpdateReceiverUseCase, CompleteFulfillmentUseCase } from '../../../application/admin-fulfillment';
 import { AdminFulfillmentQueries } from '../../../application/admin-fulfillment-queries';
 
+const WEIGHT_KIND: Readonly<Record<string, number>> = { '斤': 1, '千克': 1, 'kg': 1, '克': 1, 'g': 1, '两': 1 };
+
 export interface AdminFulfillmentQueriesPort {
   listGroups(query: { status?: string | null; page: number; pageSize: number }): Promise<{ items: unknown[]; total: number }>;
   groupDetail(groupId: string, options?: { unmasked?: boolean }): Promise<{ groupId: string; items: unknown[] } | null>;
@@ -39,8 +41,13 @@ export class AdminFulfillmentController {
   async exportCsv(@Param('id') id: string, @Req() request: RequestWithPrincipal, @Res() response: Response): Promise<void> {
     const rows = await this.queries.groupExportRows(id);
     if (!rows) throw new ApplicationError('NOT_FOUND', '拼单组不存在或未进入履约');
-    // 导出含收货明文：必须写审计（F029）
-    await this.audit.execute({ adminId: request.adminAuth?.adminId ?? null, action: 'fulfillment.export', resourceType: 'fulfillment_group', resourceId: id, requestId: request.requestId, detail: { rows: rows.length } });
+    // 导出含收货明文：必须写审计（F029）；审计失败必须阻断导出（2026-10-02 复验 P2——不得无留痕导出）
+    try {
+      await this.audit.execute({ adminId: request.adminAuth?.adminId ?? null, action: 'fulfillment.export', resourceType: 'fulfillment_group', resourceId: id, requestId: request.requestId, detail: { rows: rows.length } });
+    } catch (error) {
+      console.error('[fulfillment-export] 导出审计失败，阻断明文导出', id, error instanceof Error ? error.message : error);
+      throw new ApplicationError('EXPORT_AUDIT_FAILED', '导出审计不可用，已阻断明文导出，请稍后重试');
+    }
     const header = ['履约单号', '订单号', '用户', '分配数量(克)', '收货人', '电话', '省', '市', '区', '详址', '状态', '快递公司', '运单号', '包裹数量(克)', '补发', '发货时间'];
     const escape = (value: unknown) => {
       const text = String(value ?? '');
@@ -87,7 +94,7 @@ export class AdminFulfillmentController {
       adminId,
       requestId
     });
-    return { data: { shipmentId: result.shipmentId, fulfillmentOrder: { id: result.fulfillmentOrder.state.fulfillmentOrderId, status: result.fulfillmentOrder.state.status, shippedQuantityGrams: result.fulfillmentOrder.state.shippedQuantityGrams } }, requestId: request.requestId };
+    return { data: { shipmentId: result.shipmentId, fulfillmentOrder: { id: result.fulfillmentOrder.state.fulfillmentOrderId, status: result.fulfillmentOrder.state.status, shippedQuantityGrams: result.fulfillmentOrder.state.shippedQuantityGrams, unit: result.fulfillmentOrder.state.unit, quantityType: result.fulfillmentOrder.state.unit in WEIGHT_KIND ? 'weight' : 'countable' } }, requestId: request.requestId };
   }
 
   @Post('orders/:id/receiver')

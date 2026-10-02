@@ -117,3 +117,40 @@ test('R01 端到端分配：10 克组两笔 30 份额 → [5,5]（修复审查�
   assert.deepEqual(result.map((r) => r.grams), [5, 5]);
   assert.equal(result.reduce((s, r) => s + r.grams, 0), 10);
 });
+
+
+// ---- 2026-10-02 复验 P1：十进制文本换算（禁止浮点误差拒绝合法数量） ----
+
+test('十进制换算：1.001 kg → 1001 克（复验探针，浮点误差不得拒绝）', () => {
+  assert.deepEqual(toMinimalUnits('1.001', 'kg'), { units: 1001, kind: 'weight' });
+});
+
+test('十进制换算：0.001-9.999 kg 千分位文本全部可换算为整数克', () => {
+  let rejected = [];
+  for (let kg = 1; kg <= 9999; kg++) {
+    const text = `${Math.floor(kg / 1000)}.${String(kg % 1000).padStart(3, '0')}`;
+    const result = toMinimalUnits(text, 'kg');
+    if (result === null || result.units !== kg) rejected.push(`${text}→${result ? result.units : 'null'}`);
+  }
+  assert.deepEqual(rejected, [], '千分位 kg 文本不得有浮点误差拒绝');
+});
+
+test('十进制换算：不同精度（0.1/0.25/1.05/0.002 斤）正确换算；3.333 斤=1666.5g 拒绝', () => {
+  assert.deepEqual(toMinimalUnits('0.1', '斤'), { units: 50, kind: 'weight' });
+  assert.deepEqual(toMinimalUnits('0.25', '斤'), { units: 125, kind: 'weight' });
+  assert.deepEqual(toMinimalUnits('1.05', '斤'), { units: 525, kind: 'weight' });
+  assert.deepEqual(toMinimalUnits('0.002', '斤'), { units: 1, kind: 'weight' });
+  assert.equal(toMinimalUnits('3.333', '斤'), null, '1666.5g 非整数，不得四舍五入放过');
+});
+
+test('十进制换算：真实非整数数量仍拒绝（0.0005 斤 = 0.25g）', () => {
+  assert.equal(toMinimalUnits('0.0005', '斤'), null, '不能靠四舍五入放过非整数数量');
+  assert.equal(toMinimalUnits('1.0005', 'kg'), null, '1000.5g 非整数');
+});
+
+test('十进制换算：数量上限保护（超大数量拒绝）与非法输入', () => {
+  assert.equal(toMinimalUnits('99999999', '斤'), null, '超出上限（防溢出/脏数据）');
+  assert.deepEqual(toMinimalUnits('99999', '斤'), { units: 49999500, kind: 'weight' }, '合理大数量仍可用');
+  assert.equal(toMinimalUnits('-1', '克'), null);
+  assert.equal(toMinimalUnits('NaN', '克'), null);
+});
