@@ -1,11 +1,11 @@
 .page { padding: 24rpx; }
-.card { background: white; border-radius: 16rpx; padding: 26rpx; margin-bottom: 22rpx; display: grid; gap: 14rpx; }
-.section-title { font-size: 28rpx; font-weight: 600; color: #223247; }
-.hint { color: #a5b3ad; font-size: 22rpx; line-height: 1.6; }
-.conv-status { font-size: 26rpx; color: #54657a; }
-.primary-btn { background: #d0563f; color: white; border-radius: 12rpx; }
-.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #7b8b85; font-size: 28rpx; text-align: center; }
-.error-state { color: #a74337; }
-.ticket-row { padding: 12rpx 0; border-bottom: 1rpx solid #f0f3f1; }
-.ticket-title { font-size: 26rpx; color: #223247; }
-.ticket-meta { font-size: 22rpx; color: #a5b3ad; margin-top: 4rpx; }
+.card { background: white; border-radius: 28rpx; padding: 26rpx; margin-bottom: 22rpx; display: grid; gap: 14rpx; }
+.section-title { font-size: 28rpx; font-weight: 600; color: #1d1d1f; }
+.hint { color: #6e6e73; font-size: 22rpx; line-height: 1.6; }
+.conv-status { font-size: 26rpx; color: #515154; }
+.primary-btn { background: #0071e3; color: white; border-radius: 24rpx; }
+.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #6e6e73; font-size: 28rpx; text-align: center; }
+.error-state { color: #b42318; }
+.ticket-row { padding: 12rpx 0; border-bottom: 1rpx solid #e9e9ed; }
+.ticket-title { font-size: 26rpx; color: #1d1d1f; }
+.ticket-meta { font-size: 22rpx; color: #6e6e73; margin-top: 4rpx; }

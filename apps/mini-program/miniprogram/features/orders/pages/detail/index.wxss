@@ -1,30 +1,30 @@
 /* 订单详情样式。 */
 .notice { background: #fff7e6; color: #a06724; font-size: 22rpx; padding: 12rpx 24rpx; border-radius: 8rpx; margin-bottom: 20rpx; }
-.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #7b8b85; font-size: 28rpx; text-align: center; }
-.error-state { color: #a74337; }
-.card { background: white; border-radius: 16rpx; padding: 26rpx; margin-bottom: 22rpx; display: grid; gap: 14rpx; }
+.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #6e6e73; font-size: 28rpx; text-align: center; }
+.error-state { color: #b42318; }
+.card { background: white; border-radius: 28rpx; padding: 26rpx; margin-bottom: 22rpx; display: grid; gap: 14rpx; }
 .row1 { display: flex; justify-content: space-between; align-items: center; }
 .status { font-size: 32rpx; font-weight: 700; color: #a06724; }
-.countdown { color: #d0563f; font-size: 24rpx; }
-.order-no { color: #7b8b85; font-size: 24rpx; }
-.section-title { font-size: 28rpx; font-weight: 600; color: #223247; }
-.amount-row { display: flex; justify-content: space-between; font-size: 26rpx; color: #54657a; }
-.amount-row.total { border-top: 1rpx solid #f0f3f1; padding-top: 14rpx; }
-.total-amount { color: #d0563f; font-weight: 700; font-size: 32rpx; }
-.hint { color: #a5b3ad; font-size: 22rpx; line-height: 1.6; }
-.address { font-size: 28rpx; color: #223247; }
-.address-sub { color: #7b8b85; font-size: 26rpx; line-height: 1.6; }
-.danger-btn { background: #fff0ee; color: #a74337; border-radius: 12rpx; }
+.countdown { color: #1d1d1f; font-size: 24rpx; }
+.order-no { color: #6e6e73; font-size: 24rpx; }
+.section-title { font-size: 28rpx; font-weight: 600; color: #1d1d1f; }
+.amount-row { display: flex; justify-content: space-between; font-size: 26rpx; color: #515154; }
+.amount-row.total { border-top: 1rpx solid #e9e9ed; padding-top: 14rpx; }
+.total-amount { color: #1d1d1f; font-weight: 700; font-size: 32rpx; }
+.hint { color: #6e6e73; font-size: 22rpx; line-height: 1.6; }
+.address { font-size: 28rpx; color: #1d1d1f; }
+.address-sub { color: #6e6e73; font-size: 26rpx; line-height: 1.6; }
+.danger-btn { background: #fff0ee; color: #b42318; border-radius: 24rpx; }
 
-.pay-btn { background: #d0563f; color: white; border-radius: 12rpx; margin-bottom: 16rpx; }
-.refund-row { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; font-size: 26rpx; color: #54657a; }
-.refund-amount { color: #d0563f; font-weight: 600; }
+.pay-btn { background: #1d1d1f; color: white; border-radius: 24rpx; margin-bottom: 16rpx; }
+.refund-row { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; font-size: 26rpx; color: #515154; }
+.refund-amount { color: #1d1d1f; font-weight: 600; }
 .refund-meta { display: grid; gap: 4rpx; text-align: right; }
-.refund-time { color: #a5b3ad; font-size: 22rpx; }
-.plain-btn { background: #f2f6f4; color: #54657a; border-radius: 12rpx; margin-top: 16rpx; }
+.refund-time { color: #6e6e73; font-size: 22rpx; }
+.plain-btn { background: #f2f6f4; color: #515154; border-radius: 24rpx; margin-top: 16rpx; }
 
 .fulfillment-shipments { display: grid; gap: 12rpx; }
-.fulfillment-shipment { background: #f7faf9; border-radius: 10rpx; padding: 14rpx 18rpx; display: grid; gap: 6rpx; font-size: 26rpx; color: #54657a; }
+.fulfillment-shipment { background: #f7faf9; border-radius: 10rpx; padding: 14rpx 18rpx; display: grid; gap: 6rpx; font-size: 26rpx; color: #515154; }
 .fulfillment-shipment-head { display: flex; justify-content: space-between; }
 .fulfillment-company { color: #a06724; }
-.fulfillment-tracking { font-size: 24rpx; color: #7b8b85; }
+.fulfillment-tracking { font-size: 24rpx; color: #6e6e73; }

@@ -8,8 +8,10 @@ Page({
     loading: false,
     saving: false,
     error: '',
-    region: ['广东省', '深圳市', '南山区'],
-    form: { receiverName: '', phone: '', province: '广东省', city: '深圳市', district: '南山区', detail: '' }
+    locating: false,
+    locationHint: '',
+    region: [] as string[],
+    form: { receiverName: '', phone: '', province: '', city: '', district: '', detail: '' }
   },
 
   onLoad(query: Record<string, string | undefined>) {
@@ -67,6 +69,30 @@ Page({
       const [province, city, district] = value as [string, string, string];
       this.setData({ region: [province, city, district], form: { ...this.data.form, province, city, district } });
     }
+  },
+
+  chooseLocation() {
+    if (this.data.locating || this.data.saving) return Promise.resolve();
+    this.setData({locating:true, locationHint:'', error:''});
+    return new Promise<void>(resolve => {
+      const finish=()=>{this.setData({locating:false});resolve();};
+      if (typeof wx.chooseLocation !== 'function') {
+        this.setData({locationHint:'当前环境暂不支持定位，请手动填写地址'});finish();return;
+      }
+      wx.chooseLocation({
+        success: result => {
+          const address = result.address?.trim() ?? '';
+          const name = result.name?.trim() ?? '';
+          const detail = address.includes(name) ? address : `${address} ${name}`.trim();
+          if (detail) this.setData({form:{...this.data.form,detail,province:'',city:'',district:''},region:[],locationHint:'位置已选好，请重新确认省市区，并补充楼栋、门牌号'});
+          finish();
+        },
+        fail: error => {
+          if (!error.errMsg?.includes('cancel')) this.setData({locationHint:'暂时无法获取位置。可在微信设置中允许位置权限，也可以手动填写'});
+          finish();
+        }
+      });
+    });
   },
 
   validate(): string {

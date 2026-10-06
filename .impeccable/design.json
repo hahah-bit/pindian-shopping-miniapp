@@ -1,0 +1,274 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-06T13:45:18.0091289Z",
+  "title": "Design System: 拼单购物原生小程序",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "displayName": "操作蓝",
+        "role": "primary"
+      },
+      "primary-text": {
+        "displayName": "深操作蓝",
+        "role": "primary"
+      },
+      "primary-soft": {
+        "displayName": "选中浅蓝",
+        "role": "primary"
+      },
+      "primary-wash": {
+        "displayName": "辅助浅蓝",
+        "role": "primary"
+      },
+      "surface": {
+        "displayName": "白色承载面",
+        "role": "neutral"
+      },
+      "background": {
+        "displayName": "冷浅灰底",
+        "role": "neutral"
+      },
+      "ink": {
+        "displayName": "近黑主文字",
+        "role": "neutral"
+      },
+      "body-secondary": {
+        "displayName": "中灰正文",
+        "role": "neutral"
+      },
+      "secondary": {
+        "displayName": "次级灰",
+        "role": "neutral"
+      },
+      "muted": {
+        "displayName": "弱化灰",
+        "role": "neutral"
+      },
+      "stroke": {
+        "displayName": "描边灰",
+        "role": "neutral"
+      },
+      "divider": {
+        "displayName": "分隔灰",
+        "role": "neutral"
+      },
+      "error": {
+        "displayName": "异常红",
+        "role": "semantic"
+      },
+      "warning-text": {
+        "displayName": "状态棕",
+        "role": "semantic"
+      },
+      "warning-soft": {
+        "displayName": "浅棕状态底",
+        "role": "semantic"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "purpose": "首页两行标题；系统无衬线，平台中文回退。",
+        "displayName": "首页主标题"
+      },
+      "headline": {
+        "purpose": "全局/地址页基准；我的52rpx和详情42rpx是局部变体。",
+        "displayName": "页面标题"
+      },
+      "title": {
+        "purpose": "基础分区32rpx；详情、客服及AI有局部变体。",
+        "displayName": "分区标题"
+      },
+      "price": {
+        "purpose": "首页38rpx近黑价格。",
+        "displayName": "份额起价"
+      },
+      "body": {
+        "purpose": "继承页面字体；正文、按钮、原生输入。",
+        "displayName": "正文"
+      },
+      "label": {
+        "purpose": "基础状态提示；局部20至26rpx保留上下文。",
+        "displayName": "提示"
+      },
+      "subtitle": {
+        "purpose": "页头/商品说明；AI回答继承正文并使用1.8行高。",
+        "displayName": "说明"
+      }
+    },
+    "shadows": [
+      {
+        "name": "footer-soft-separation",
+        "value": "0 -10rpx 30rpx rgba(0,0,0,.035)",
+        "purpose": "商品详情固定底栏的最终级联值。"
+      },
+      {
+        "name": "share-selected-inset",
+        "value": "inset 0 0 0 2rpx #0071e3",
+        "purpose": "选中份额的状态内描边。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-press",
+        "value": "transform 120ms ease-out,opacity 120ms ease-out",
+        "purpose": "全局按钮；按压scale(.97)/opacity .88，局部hover为.85。"
+      },
+      {
+        "name": "selection-color",
+        "value": "background-color 220ms ease-out,color 220ms ease-out",
+        "purpose": "分类切换；份额行只使用背景色的220ms过渡。"
+      },
+      {
+        "name": "product-card-press",
+        "value": "transform 180ms cubic-bezier(.16,1,.3,1)",
+        "purpose": "商品卡片按压。"
+      },
+      {
+        "name": "sheet-enter",
+        "value": "320ms cubic-bezier(.16,1,.3,1)",
+        "purpose": "下单面板translateY(100%)到translateY(0)。"
+      },
+      {
+        "name": "veil-enter",
+        "value": "220ms ease-out",
+        "purpose": "下单遮罩opacity 0到1。"
+      },
+      {
+        "name": "native-gallery",
+        "value": "interval 4500ms; duration 420ms; easeOutCubic",
+        "purpose": "原生swiper；页面可见、多图且未打开下单面板时自动轮播。"
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "源码关闭按钮/分类/份额transition和transform、面板/遮罩animation；未保证原生swiper或scroll-with-animation，待验。"
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "主要按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "原生button的浏览器预览；375px画布，rpx÷2。hover/active仅模拟原生按压；焦点为浏览器默认。",
+      "html": "<button class=\"ds-primary\">确认这份好物</button>",
+      "css": ".ds-primary{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:#0071e3;color:#fff;font-size:14px;line-height:1.5;min-height:48px;border:0;border-radius:12px;padding:11px 12px;transition:transform 120ms ease-out,opacity 120ms ease-out}.ds-primary:hover,.ds-primary:active{transform:scale(.97);opacity:.88}.ds-primary:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-primary{transition:none;transform:none!important}}"
+    },
+    {
+      "name": "禁用按钮",
+      "kind": "button",
+      "refersTo": "button-disabled",
+      "description": "原生disabled灰底灰字；预览不触发按压。",
+      "html": "<button class=\"ds-disabled\" disabled>正在提交…</button>",
+      "css": ".ds-disabled{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:#e9e9ed;color:#6e6e73;font-size:14px;line-height:1.5;min-height:48px;border:0;border-radius:12px;padding:11px 12px;opacity:1}.ds-disabled:focus-visible{outline:revert;}"
+    },
+    {
+      "name": "位置选择按钮",
+      "kind": "button",
+      "refersTo": "button-location",
+      "description": "地址页主动定位辅助动作；预览rpx÷2，焦点为浏览器默认。",
+      "html": "<button class=\"ds-location\">选择收货位置</button>",
+      "css": ".ds-location{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:#e6f1ff;color:#0066cc;font-size:14px;line-height:1.5;min-height:48px;border:0;border-radius:12px;padding:11px 12px;transition:transform 120ms ease-out,opacity 120ms ease-out}.ds-location:hover,.ds-location:active{transform:scale(.97);opacity:.88}.ds-location:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-location{transition:none;transform:none!important}}"
+    },
+    {
+      "name": "人工客服入口",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "AI顶部透明辅助按钮；文字保留人工身份，预览rpx÷2。",
+      "html": "<button class=\"ds-human\">人工客服</button>",
+      "css": ".ds-human{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:transparent;color:#0071e3;font-size:12.5px;line-height:1.5;min-width:68px;min-height:48px;border:0;border-radius:12px;padding:0 8px;transition:transform 120ms ease-out,opacity 120ms ease-out}.ds-human:hover,.ds-human:active{transform:scale(.97);opacity:.88}.ds-human:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-human{transition:none;transform:none!important}}"
+    },
+    {
+      "name": "搜索输入",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "原生搜索框转译；内联SVG重述源几何图标，预览无请求绑定。",
+      "html": "<label class=\"ds-search\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"7\"/><path d=\"m15 15 6 6\"/></svg><input aria-label=\"搜索好物\" placeholder=\"搜索你想要的好物\"/></label>",
+      "css": ".ds-search{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;display:flex;align-items:center;height:48px;background:#e9e9ed;border-radius:12px;padding:0 13px;gap:10px;color:#6e6e73}.ds-search svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}.ds-search input{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;flex:1;min-width:0;font-size:14px;background:transparent;border:0;color:#1d1d1f;caret-color:#0071e3}.ds-search input::placeholder{color:#6e6e73}.ds-search input:focus-visible{outline:revert;}"
+    },
+    {
+      "name": "分类胶囊",
+      "kind": "chip",
+      "refersTo": "category-pill",
+      "description": "分类常态与选中态；浏览器hover仅模拟源码pressed反馈，不增加原生鼠标状态。",
+      "html": "<div class=\"ds-categories\"><button class=\"ds-category ds-category-selected\" aria-pressed=\"true\">全部</button><button class=\"ds-category\" aria-pressed=\"false\">水果</button></div>",
+      "css": ".ds-categories{display:flex;gap:6px}.ds-category{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:#fff;color:#515154;font-size:12.5px;min-height:48px;padding:0 13px;border:0;border-radius:20px;transition:background-color 220ms ease-out,color 220ms ease-out,transform 120ms ease-out}.ds-category-selected{background:#1d1d1f;color:#fff}.ds-category:hover,.ds-category:active{transform:scale(.97);opacity:.88}.ds-category:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-category{transition:none;transform:none!important}}"
+    },
+    {
+      "name": "白色承载卡片",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "共用卡片的浏览器预览，平面无阴影；展示客服入口的真实内容类型。",
+      "html": "<section class=\"ds-card\"><h2>AI 智能客服</h2><p>AI 回复请核实，订单和售后请联系人工客服。</p></section>",
+      "css": ".ds-card{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:#fff;color:#1d1d1f;border-radius:14px;padding:16px}.ds-card h2{font-size:16px;font-weight:600;line-height:1.5;margin:0 0 10px}.ds-card p{font-size:12px;line-height:1.6;color:#6e6e73;margin:0}"
+    },
+    {
+      "name": "原生Tab配色示意",
+      "kind": "nav",
+      "refersTo": "tab-navigation",
+      "description": "仅示意原创图标与Tab色彩；宿主微信控制实际Tab尺寸和排版。SVG根据原创72px脚本路径转译。",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"底部导航\"><button class=\"ds-tab ds-tab-selected\" aria-current=\"page\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><path d=\"M14 26 36 14 58 26 36 38 14 26V51L36 63 58 51V26M36 38V63M25 20 47 32\"/></svg>商品</button><button class=\"ds-tab\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><path d=\"M19 13H53V60H19ZM27 26H45M27 36H45M27 46H38\"/></svg>订单</button><button class=\"ds-tab\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><circle cx=\"36\" cy=\"22\" r=\"11\"/><path d=\"M15 58.5a21 19.5 0 0 1 42 0M15 58H57\"/></svg>我的</button></nav>",
+      "css": ".ds-tabs{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;display:flex;background:#fff}.ds-tab{flex:1;display:flex;flex-direction:column;align-items:center;background:transparent;border:0;color:#6e6e73;font:inherit;padding:8px}.ds-tab-selected{color:#0071e3}.ds-tab svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:4;stroke-linecap:round}.ds-tab:focus-visible{outline:revert;}"
+    },
+    {
+      "name": "已选份额",
+      "kind": "custom",
+      "refersTo": "share-option-selected",
+      "description": "详情原生份额行转译；文字和内描边共同表达已选，预览数值仅示意。",
+      "html": "<button class=\"ds-share\" aria-pressed=\"true\"><span class=\"ds-share-label\">1/2</span><span class=\"ds-share-quantity\">参考数量</span><span class=\"ds-share-price\">已选 ¥22.40</span></button>",
+      "css": ".ds-share{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;display:flex;align-items:center;justify-content:space-between;gap:5px;min-height:48px;padding:11px 10px;border:0;border-radius:10px;background:#edf5ff;box-shadow:inset 0 0 0 1px #0071e3;transition:transform 120ms ease-out,background-color 220ms ease-out}.ds-share-label{color:#0066cc;font-size:15px;font-weight:600}.ds-share-quantity{color:#515154;font-size:13px}.ds-share-price{color:#1d1d1f;font-size:14px;font-weight:700}.ds-share:hover,.ds-share:active{transform:scale(.97);opacity:.85}.ds-share:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-share{transition:none;transform:none!important}}"
+    },
+    {
+      "name": "AI用户消息",
+      "kind": "custom",
+      "description": "聊天用户消息的浏览器预览；不模拟助手身份或网络模型调用。",
+      "html": "<div class=\"ds-user-message\">怎么参与拼单？</div>",
+      "css": ".ds-user-message{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;margin-left:30px;background:#0071e3;color:#fff;border-radius:13px 13px 3px 13px;padding:12px 14px;white-space:pre-wrap;font-size:14px;line-height:1.65}"
+    }
+  ],
+  "narrative": {
+    "northStar": "清晰的好物橱窗",
+    "overview": "真实商品摄影、清晰份额价格和可发现的操作构成界面。浅灰白承载黑灰文字，蓝色引导下一步；以留白和字号建立层级，保留微信原生导航、Tab、输入、轮播与选择器。此名称是对已确认 iPhone 宣传页参考和实际构建的描述，不是新的方向选择。\n\n本文件是 2026-10-06 的 scan-mode 记录。规范值来自原生 WXML/WXSS 的最终级联，机器层使用实际 rpx 单位。适用范围是商品浏览与详情、地址、我的、客服入口和 AI 对话的共用语言；旧页面存在差异，不以本文件宣称全应用已经统一。它不改变交易规则、页面授权或后端契约。",
+    "keyCharacteristics": [
+      "商品照片与份额起价先被看见。",
+      "白色承载面与浅灰背景形成平静层次。",
+      "黑灰文字分层，蓝色集中于交互及其选中反馈。",
+      "原生控件、短按压反馈、底部安全区共同支撑操作。"
+    ],
+    "rules": [
+      {
+        "name": "The 操作有色 Rule",
+        "body": "蓝色表示操作或与操作相关的选择状态；商品摄影保留其真实色彩，价格保持近黑色。",
+        "section": "colors"
+      },
+      {
+        "name": "The 字体继承 Rule",
+        "body": "页面变体只覆盖其所需的字号或字重；没有显式定义的属性继承原生页面基础字体，不能把推测值写成源代码事实。",
+        "section": "typography"
+      },
+      {
+        "name": "The 空间分工 Rule",
+        "body": "小间距组织同一组内容，大间距区分区块；固定底栏和面板遵循安全区，正文保持可滚动。",
+        "section": "layout"
+      },
+      {
+        "name": "The 常态平面 Rule",
+        "body": "共用卡片保留平面；延续现有状态描边和局部覆盖层，不为每张商品卡新增阴影。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** 延续真实商品摄影、黑灰文字层级和蓝色操作意义。",
+      "**Do** 使用原生 rpx 与安全区，保留加载、空态、失败占位、重试、loading 和 disabled 的真实状态。",
+      "**Do** 保留体验商品、参考价格、支付未开放与 AI 身份/核实提示的事实表达。",
+      "**Do** 将新页面的共用样式与上述 token 对照，页面变体明确记录适用范围。"
+    ],
+    "donts": [
+      "**Don't** 添加虚假优惠、销量或产地认证来填补空白。",
+      "**Don't** 将设计预览 HTML、开发者工具截图或本地接口验证当作安卓/真机/全部状态验收。",
+      "**Don't** 将人工客服旧浅绿背景、旧黑色按钮和不同输入圆角写成新的全局规则；这是存量漂移，本轮未修复。",
+      "**Don't** 把只在单页存在的尺寸、动画或提示色扩展成所有页面的规范。"
+    ]
+  }
+}

@@ -1,17 +1,17 @@
 /* 订单列表样式。 */
 .notice { background: #fff7e6; color: #a06724; font-size: 22rpx; padding: 12rpx 24rpx; border-radius: 8rpx; margin-bottom: 20rpx; }
-.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #7b8b85; font-size: 28rpx; text-align: center; }
-.error-state { color: #a74337; }
-.order-card { background: white; border-radius: 16rpx; padding: 26rpx; margin-bottom: 22rpx; display: grid; gap: 14rpx; }
+.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #6e6e73; font-size: 28rpx; text-align: center; }
+.error-state { color: #b42318; }
+.order-card { background: white; border-radius: 28rpx; padding: 26rpx; margin-bottom: 22rpx; display: grid; gap: 14rpx; }
 .hover { opacity: 0.85; }
 .row1 { display: flex; justify-content: space-between; align-items: center; }
-.order-no { font-size: 26rpx; color: #223247; font-weight: 600; }
+.order-no { font-size: 26rpx; color: #1d1d1f; font-weight: 600; }
 .status { font-size: 24rpx; color: #a06724; }
-.status.paid { color: #356557; }
-.status.cancelled, .status.expired { color: #a5b3ad; }
-.row2 { display: flex; justify-content: space-between; color: #54657a; font-size: 26rpx; }
-.amount { color: #d0563f; font-weight: 700; font-size: 30rpx; }
+.status.paid { color: #0066cc; }
+.status.cancelled, .status.expired { color: #6e6e73; }
+.row2 { display: flex; justify-content: space-between; color: #515154; font-size: 26rpx; }
+.amount { color: #1d1d1f; font-weight: 700; font-size: 30rpx; }
 .row3 { display: flex; justify-content: space-between; align-items: center; }
-.time { color: #a5b3ad; font-size: 22rpx; }
-.danger { color: #a74337; }
-.load-more { text-align: center; color: #a5b3ad; font-size: 24rpx; padding: 20rpx 0 40rpx; }
+.time { color: #6e6e73; font-size: 22rpx; }
+.danger { color: #b42318; }
+.load-more { text-align: center; color: #6e6e73; font-size: 24rpx; padding: 20rpx 0 40rpx; }

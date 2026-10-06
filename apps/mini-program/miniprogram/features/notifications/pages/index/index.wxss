@@ -1,6 +1,6 @@
 .page { padding: 24rpx; display: grid; gap: 20rpx; }
-.state { text-align: center; color: #7b8b85; padding: 60rpx 0; display: grid; gap: 16rpx; justify-items: center; }
-.error-state { color: #a74337; }
+.state { text-align: center; color: #6e6e73; padding: 60rpx 0; display: grid; gap: 16rpx; justify-items: center; }
+.error-state { color: #b42318; }
 .hint { color: #9aa8b0; font-size: 24rpx; }
 .notice-card { display: grid; gap: 12rpx; }
 .notice-card.read { opacity: 0.75; }
@@ -8,5 +8,5 @@
 .notice-title { display: flex; align-items: center; gap: 12rpx; font-weight: 600; font-size: 29rpx; }
 .dot { width: 14rpx; height: 14rpx; border-radius: 50%; background: #e25c4d; flex-shrink: 0; }
 .notice-time { color: #9aa8b0; font-size: 22rpx; flex-shrink: 0; }
-.notice-body { color: #54657a; font-size: 26rpx; line-height: 1.6; }
-.error-text { color: #a74337; font-size: 24rpx; text-align: center; }
+.notice-body { color: #515154; font-size: 26rpx; line-height: 1.6; }
+.error-text { color: #b42318; font-size: 24rpx; text-align: center; }

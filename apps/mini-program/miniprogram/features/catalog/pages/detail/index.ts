@@ -19,6 +19,8 @@ type DetailData = Omit<MiniProductView, 'shareOptions'> & {
   fromPriceText: string;
   quantitySummary: string;
   gallery: { url: string; failed: boolean }[];
+  galleryIndex: number;
+  visible: boolean;
   shareOptions: ShareOptionItem[];
   order: import('@pindian/contracts').MiniOrderView | null;
   orderPanelOpen: boolean;
@@ -51,6 +53,8 @@ Page<DetailData, WechatMiniprogram.IAnyObject>({
     fromPriceText: '',
     quantitySummary: '',
     gallery: [],
+    galleryIndex: 0,
+    visible: true,
     shareOptions: [],
     order: null,
     orderPanelOpen: false,
@@ -64,6 +68,15 @@ Page<DetailData, WechatMiniprogram.IAnyObject>({
     this.setData({ id: query.id ?? '' });
     void this.load();
   },
+
+  onShow() {
+    this.setData({ visible: true });
+    if (this.data.orderPanelOpen) void this.refreshAddress();
+  },
+  onHide() { this.setData({ visible: false }); },
+  onUnload() { this.setData({ visible: false }); },
+  onGalleryChange(event: WechatMiniprogram.CustomEvent<{current: number}>) { this.setData({galleryIndex: event.detail.current}); },
+  preventBubble() {},
 
   async load() {
     const id = this.data.id;
@@ -132,6 +145,10 @@ Page<DetailData, WechatMiniprogram.IAnyObject>({
       return;
     }
     this.setData({ orderPanelOpen: true, orderError: '' });
+    await this.refreshAddress();
+  },
+
+  async refreshAddress() {
     try {
       const result = await listAddresses();
       const preferred = result.items.find((a) => a.isDefault) ?? result.items[0] ?? null;
@@ -139,8 +156,7 @@ Page<DetailData, WechatMiniprogram.IAnyObject>({
         selectedAddress: preferred ? { id: preferred.id, label: `${preferred.receiverName} ${preferred.phone}（${preferred.province}${preferred.city}${preferred.district} ${preferred.detail}）` } : null
       });
     } catch (cause) {
-      void cause;
-      this.setData({ selectedAddress: null });
+      this.setData({ selectedAddress: null, orderError: cause instanceof Error ? cause.message : '地址加载失败，请重试' });
     }
   },
 
@@ -156,14 +172,14 @@ Page<DetailData, WechatMiniprogram.IAnyObject>({
   async submitOrder() {
     if (this.data.placingOrder) return;
     const units = this.data.selectedUnits;
-    if (!units || !this.data.order) return;
+    if (!units || !this.data.id) return;
     if (!this.data.selectedAddress) {
       this.setData({ orderError: '请先添加收货地址' });
       return;
     }
     this.setData({ placingOrder: true, orderError: '' });
     try {
-      const result = await placeOrder(this.data.order.id, units, this.data.selectedAddress.id);
+      const result = await placeOrder(this.data.id, units, this.data.selectedAddress.id);
       this.setData({ orderPanelOpen: false });
       wx.navigateTo({ url: `/features/orders/pages/detail/index?id=${result.id}` });
     } catch (cause) {

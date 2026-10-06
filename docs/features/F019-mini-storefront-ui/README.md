@@ -1,13 +1,10 @@
-# F019 既有商城页面视觉与组件适配
+# F019 小程序页面体验改版
 
-- 功能编号：F019。
-- 目标：将现有商品、个人中心、地址与订单列表/详情统一为商城视觉；首页使用双列瀑布流。
-- 主领域：Catalog展示；协作领域：IdentityAccess展示、Ordering/GroupBuying展示。
-- 负责 Agent：当前主 Agent。
-- 本次修改目录：仅本功能与 T005 文档；代码位置留在 plan 中规划。
-- 前置功能：F008–F011、F017、T001前端框架。
-- 所属大任务：[T005](../../tasks/T005-mini-ui-redesign/README.md)；[整体 spec](../../tasks/T005-mini-ui-redesign/spec.md)、[整体 plan](../../tasks/T005-mini-ui-redesign/plan.md)。
-- 当前状态：已规划，未实施。
-- 阻塞项：用户尚未授权代码改造；GitHub 本机 DNS 和组件构建兼容性需实施前确认；真实微信验收依赖外部环境。
+- 功能编号：F019；目标：浅灰白、大商品图、蓝色操作按钮和原生细节动效。
+- 主领域：Catalog 展示；协作领域：IdentityAccess、Ordering、CustomerService、通知展示。
+- 负责 Agent：Codex；修改范围：apps/mini-program/miniprogram 的现有页面及平台请求适配。
+- 前置：现有 T002–T012、F049；所属任务：[T013](../../tasks/T013-mini-experience-refresh/README.md)。
+- 当前状态：已完成（本地开发与开发者工具页面复查）；阻塞：无本地开发阻塞，安卓真机与定位授权实际结果待用户设备。
+- 文档：[DDD](ddd.md)、[spec](spec.md)、[plan](plan.md)、verification.md。
 
-文档：[DDD](ddd.md)、[spec](spec.md)、[plan](plan.md)。
+2026-10-06 用户明确授权直接实施 Apple 宣传页参考风格；覆盖原 T005 的规划方向。既有交易、权限和售后规则继续有效。T005 未提交内容仍保留，不作为本轮实现成果。

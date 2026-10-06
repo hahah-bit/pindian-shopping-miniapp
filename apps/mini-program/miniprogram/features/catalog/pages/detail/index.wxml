@@ -14,7 +14,7 @@
   </view>
 
   <block wx:else>
-    <swiper wx:if="{{gallery.length}}" class="gallery" indicator-dots="{{gallery.length > 1}}" circular="{{gallery.length > 1}}">
+    <view wx:if="{{gallery.length}}" class="gallery-wrap"><swiper class="gallery" autoplay="{{visible && gallery.length > 1 && !orderPanelOpen}}" interval="4500" duration="420" easing-function="easeOutCubic" bindchange="onGalleryChange" indicator-dots="{{false}}" circular="{{gallery.length > 1}}">
       <swiper-item wx:for="{{gallery}}" wx:key="url">
         <view class="gallery-slide">
           <image
@@ -24,12 +24,11 @@
             data-index="{{index}}"
             binderror="onImageError"
             bindtap="previewImage"
-            data-index="{{index}}"
           />
           <view wx:if="{{item.failed}}" class="image-placeholder">图片加载失败</view>
         </view>
       </swiper-item>
-    </swiper>
+    </swiper><view wx:if="{{gallery.length > 1}}" class="gallery-counter">{{galleryIndex + 1}} / {{gallery.length}}</view></view>
     <view wx:else class="gallery-empty">暂无商品图片</view>
 
     <view class="card">
@@ -58,7 +57,7 @@
         <text class="share-quantity">{{item.quantityText}} {{unit}}</text>
         <text class="share-price">{{selectedUnits === item.units ? '已选' : '选择'}} ¥{{item.priceText}}</text>
       </view>
-      <view class="hint">参考价按份额均摊四舍五入到分，仅用于展示；拼单开放后以下单时实际报价为准。</view>
+      <view class="hint">参考价按份额均摊四舍五入到分，仅用于展示；以下单时实际报价为准。</view>
     </view>
 
     <view class="card">
@@ -70,13 +69,13 @@
     <view class="footer-bar">
       <text wx:if="{{soldOut}}" class="footer-soldout">已售罄</text>
       <button wx:else class="footer-btn {{selectedUnits === null ? 'disabled' : ''}}" bindtap="openOrderPanel">
-        {{selectedUnits === null ? '选择份额下单' : '确认下单（已选 ' + selectedUnits + '/60 单位）'}}
+        {{selectedUnits === null ? '选择份额下单' : '确认这份好物'}}
       </button>
       <text class="footer-note-inline">微信支付暂未开放</text>
     </view>
 
     <view wx:if="{{orderPanelOpen}}" class="panel-mask" bindtap="closeOrderPanel">
-      <view class="panel" catchtap="">
+      <view class="panel" catchtap="preventBubble">
         <view class="panel-head">
           <text class="panel-title">确认下单</text>
           <text class="panel-close" bindtap="closeOrderPanel">关闭</text>
@@ -91,9 +90,9 @@
         </view>
         <view wx:if="{{orderError}}" class="panel-error">{{orderError}}</view>
         <button class="panel-submit" bindtap="submitOrder" loading="{{placingOrder}}" disabled="{{placingOrder || !selectedAddress}}">
-          {{placingOrder ? '正在提交…' : '提交订单（服务端生成报价）'}}
+          {{placingOrder ? '正在提交…' : '确认下单，查看报价'}}
         </button>
-        <view class="panel-hint">提交即锁定份额（15 分钟），金额由服务端计算；微信支付暂未开放。</view>
+        <view class="panel-hint">提交后临时预留份额，实际金额和有效时间以订单为准。当前未接入真实支付。</view>
       </view>
     </view>
   </block>

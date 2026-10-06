@@ -1,31 +1,35 @@
 /* 我的页样式。 */
 .source-banner { background: #fff7e6; color: #a06724; font-size: 22rpx; padding: 12rpx 24rpx; border-radius: 8rpx; margin-bottom: 20rpx; }
-.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #7b8b85; font-size: 28rpx; text-align: center; }
-.error-state { color: #a74337; }
-.card { background: white; border-radius: 16rpx; padding: 28rpx; margin-bottom: 24rpx; }
+.state { display: grid; gap: 18rpx; justify-items: center; padding: 120rpx 40rpx; color: #6e6e73; font-size: 28rpx; text-align: center; }
+.error-state { color: #b42318; }
+.card { background: white; border-radius: 28rpx; padding: 28rpx; margin-bottom: 24rpx; }
 .login-card { display: grid; gap: 20rpx; justify-items: center; text-align: center; }
-.title { font-size: 32rpx; font-weight: 700; color: #223247; }
-.subtitle { color: #7b8b85; font-size: 24rpx; line-height: 1.7; }
-.primary-btn { background: #287d68; color: white; border-radius: 12rpx; width: 80%; }
-.error-text { color: #a74337; font-size: 24rpx; margin-top: 12rpx; }
+.title { font-size: 32rpx; font-weight: 700; color: #1d1d1f; }
+.subtitle { color: #6e6e73; font-size: 24rpx; line-height: 1.7; }
+.primary-btn { background: #0071e3; color: white; border-radius: 24rpx; width: 80%; }
+.error-text { color: #b42318; font-size: 24rpx; margin-top: 12rpx; }
 .profile-row { display: flex; gap: 24rpx; align-items: flex-start; }
-.avatar-placeholder { width: 100rpx; height: 100rpx; border-radius: 50%; background: #287d68; color: white; display: grid; place-items: center; font-size: 40rpx; flex-shrink: 0; }
+.avatar-placeholder { width: 100rpx; height: 100rpx; border-radius: 50%; background: #0071e3; color: white; display: grid; place-items: center; font-size: 40rpx; flex-shrink: 0; }
 .profile-main { flex: 1; display: grid; gap: 12rpx; }
-.nickname { font-size: 32rpx; font-weight: 700; color: #223247; }
-.edit-hint { font-size: 20rpx; color: #a5b3ad; font-weight: 400; }
+.nickname { min-height: 96rpx; min-width: 96rpx; display: flex; align-items: center; gap: 12rpx; font-size: 32rpx; font-weight: 700; color: #1d1d1f; }
+.edit-hint { font-size: 20rpx; color: #6e6e73; font-weight: 400; }
 .nickname-edit { display: flex; gap: 10rpx; align-items: center; }
-.nickname-edit input { border: 1rpx solid #d7e1e8; border-radius: 8rpx; padding: 8rpx 14rpx; font-size: 26rpx; flex: 1; }
+.nickname-edit input { border: 1rpx solid #d2d2d7; border-radius: 8rpx; padding: 8rpx 14rpx; font-size: 26rpx; flex: 1; }
 .meta-row { display: flex; }
-.meta { color: #a5b3ad; font-size: 22rpx; }
+.meta { color: #6e6e73; font-size: 22rpx; }
 .phone-badge { font-size: 22rpx; border-radius: 6rpx; padding: 4rpx 12rpx; }
-.phone-badge.bound { color: #356557; background: #eaf3ef; }
+.phone-badge.bound { color: #0066cc; background: #edf5ff; }
 .phone-badge.unbound { color: #a06724; background: #fdf1e3; }
-.action-card { display: flex; justify-content: space-between; align-items: center; font-size: 28rpx; color: #223247; }
+.action-card { display: flex; justify-content: space-between; align-items: center; font-size: 28rpx; color: #1d1d1f; }
 .action-disabled { display: grid; gap: 6rpx; }
 .hover { opacity: 0.85; }
-.arrow { color: #c3cfdb; }
-.danger-text { color: #a74337; }
-.phone-btn { background: #287d68; color: white; border-radius: 12rpx; margin-bottom: 24rpx; }
+.arrow { color: #86868b; }
+.danger-text { color: #b42318; }
+.phone-btn { background: #0071e3; color: white; border-radius: 24rpx; margin-bottom: 24rpx; }
 
 .entry-main { display: flex; align-items: center; gap: 12rpx; }
-.unread-badge { min-width: 32rpx; height: 32rpx; padding: 0 10rpx; border-radius: 16rpx; background: #e25c4d; color: #fff; font-size: 20rpx; display: grid; place-items: center; }
+.unread-badge { min-width: 32rpx; height: 32rpx; padding: 0 10rpx; border-radius: 28rpx; background: #e25c4d; color: #fff; font-size: 20rpx; display: grid; place-items: center; }
+
+.profile-heading{font-size:52rpx;letter-spacing:-1rpx;font-weight:700;margin:8rpx 0 12rpx}.profile-subheading{font-size:26rpx;color:#6e6e73;margin-bottom:36rpx}.primary-btn{width:100%}.card{border-radius:28rpx}.action-card{min-height:104rpx}.avatar-placeholder{background:#e6f1ff;color:#0066cc}.profile-main{min-width:0}.nickname-edit{flex-wrap:wrap}
+
+.arrow{font-size:0;width:12rpx;height:12rpx;border-top:2rpx solid #6e6e73;border-right:2rpx solid #6e6e73;transform:rotate(45deg);margin-right:8rpx}

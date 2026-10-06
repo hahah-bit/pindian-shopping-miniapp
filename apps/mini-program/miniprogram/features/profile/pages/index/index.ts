@@ -22,7 +22,8 @@ Page({
     nicknameInput: '',
     savingNickname: false,
     bindingPhone: false,
-    unreadCount: 0
+    unreadCount: 0,
+    joinedDate: ''
   },
 
   onShow() {
@@ -34,7 +35,7 @@ Page({
     try {
       const user = await fetchCurrentUser();
       const unreadCount = await fetchUnreadCount();
-      this.setData({ user, unreadCount });
+      this.setData({ user, unreadCount, joinedDate: user?.createdAt.slice(0,10) ?? '' });
     } catch (cause) {
       this.setData({ error: cause instanceof Error ? cause.message : '加载失败' });
     } finally {
@@ -47,7 +48,7 @@ Page({
     this.setData({ loggingIn: true, error: '' });
     try {
       const result = await loginWithWechat();
-      this.setData({ user: { ...result.user, phoneVerified: result.user.phoneVerified } });
+      this.setData({ user: { ...result.user, phoneVerified: result.user.phoneVerified },joinedDate:result.user.createdAt.slice(0,10) });
       wx.showToast({ title: result.isNewUser ? '登录成功，欢迎' : '欢迎回来', icon: 'success' });
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : '登录失败';
@@ -120,6 +121,8 @@ Page({
       this.setData({ bindingPhone: false });
     }
   },
+
+  openSupport() { wx.navigateTo({url:'/features/cs/pages/index/index'}); },
 
   openAddresses() {
     if (!this.data.user) {

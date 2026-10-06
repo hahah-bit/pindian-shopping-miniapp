@@ -1,10 +1,7 @@
 <view class="page">
   <view wx:if="{{loading}}" class="state">正在加载地址…</view>
-  <view wx:elif="{{error && !saving}}" class="state error-state">
-    <text>{{error}}</text>
-  </view>
   <block wx:else>
-    <view class="card">
+    <view class="address-heading">{{isEdit ? '编辑收货地址' : '送到哪里？'}}</view><view class="subtitle">填好地址，每一份好物都能找到你。</view><button class="location-btn" bindtap="chooseLocation" loading="{{locating}}" disabled="{{locating || saving}}">{{locating ? '正在打开地图…' : '定位选择地址'}}</button><view wx:if="{{locationHint}}" class="location-hint">{{locationHint}}</view><view class="card">
       <label class="field">
         <text>收货人</text>
         <input value="{{form.receiverName}}" data-field="receiverName" bindinput="onInput" maxlength="20" placeholder="1-20 个字符" />
@@ -16,7 +13,7 @@
       <label class="field">
         <text>所在地区</text>
         <picker mode="region" value="{{region}}" bindchange="onRegionChange">
-          <view class="region-value">{{region[0]}} {{region[1]}} {{region[2]}} ▾</view>
+          <view class="region-value">{{region.length ? region[0] + ' ' + region[1] + ' ' + region[2] : '请选择省市区'}}</view>
         </picker>
       </label>
       <label class="field">

@@ -50,9 +50,12 @@ export function toCatalogError(cause: unknown): CatalogError {
   return { message: '加载失败，请稍后重试', kind: 'server' };
 }
 
-export async function getProducts(page = 1, pageSize = 10): Promise<PageView<MiniProductListItem>> {
-  if (apiConfig.mode === 'mock') return MOCK_LIST;
-  return fetchMiniProducts(page, pageSize);
+export async function getProducts(page = 1, pageSize = 10, filters: {keyword?: string; category?: string} = {}): Promise<PageView<MiniProductListItem>> {
+  if (apiConfig.mode === 'mock') {
+    const items = MOCK_LIST.items.filter(item => (!filters.keyword || item.name.includes(filters.keyword)) && (!filters.category || (item.category ?? 'other') === filters.category));
+    return {...MOCK_LIST, items: items.slice((page-1)*pageSize,page*pageSize), page, pageSize, total:items.length};
+  }
+  return fetchMiniProducts(page, pageSize, filters);
 }
 
 export async function getProductDetail(id: string): Promise<MiniProductView> {

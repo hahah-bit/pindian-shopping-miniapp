@@ -39,8 +39,9 @@ export function httpGet<T>(options: RequestOptions): Promise<T> {
   });
 }
 
-export function fetchMiniProducts(page = 1, pageSize = 10): Promise<PageView<MiniProductListItem>> {
-  return httpGet<PageView<MiniProductListItem>>({ url: `/api/mini/v1/products?page=${page}&pageSize=${pageSize}` });
+export function fetchMiniProducts(page = 1, pageSize = 10, filters: {keyword?: string; category?: string} = {}): Promise<PageView<MiniProductListItem>> {
+  const query = `page=${page}&pageSize=${pageSize}&keyword=${encodeURIComponent(filters.keyword ?? '')}&category=${encodeURIComponent(filters.category ?? '')}`;
+  return httpGet<PageView<MiniProductListItem>>({ url: `/api/mini/v1/products?${query}` });
 }
 
 export function fetchMiniProductDetail(id: string): Promise<MiniProductView> {

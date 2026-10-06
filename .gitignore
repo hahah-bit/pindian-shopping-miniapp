@@ -13,3 +13,6 @@ data/simulation/
 data/release/
 
 !.env.production.example
+
+# 实际页面验收截图留在本机，可能包含本人资料
+.impeccable/review/

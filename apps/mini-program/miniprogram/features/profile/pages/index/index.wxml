@@ -1,4 +1,4 @@
-<view class="page">
+<view class="page"><view class="profile-heading">我的日常。</view><view class="profile-subheading">每一份喜欢，都值得好好安排。</view>
   <view wx:if="{{isMock}}" class="source-banner">Mock 数据预览（platform/config.ts 可切换 api）</view>
 
   <view wx:if="{{loading}}" class="state">正在加载…</view>
@@ -33,7 +33,7 @@
           <view class="meta-row">
             <text class="phone-badge {{user.hasPhone ? 'bound' : 'unbound'}}">{{user.hasPhone ? (user.phoneMasked + ' 已验证') : '未绑定手机号'}}</text>
           </view>
-          <view class="meta-row"><text class="meta">注册于 {{user.createdAt}}</text></view>
+          <view class="meta-row"><text class="meta">注册于 {{joinedDate}}</text></view>
         </view>
       </view>
       <view wx:if="{{error}}" class="error-text">{{error}}</view>
@@ -44,6 +44,7 @@
       <text class="arrow">›</text>
     </view>
 
+    <view class="card action-card" hover-class="hover" bindtap="openSupport"><text>客服与帮助</text><text class="arrow">›</text></view>
     <view class="card action-card" hover-class="hover" bindtap="openAddresses">
       <text>收货地址</text><text class="arrow">›</text>
     </view>
@@ -51,7 +52,7 @@
     <view wx:if="{{user.hasPhone}}" class="card action-card">
       <view class="action-disabled">
         <text>手机号已绑定</text>
-        <text class="meta">换绑请重新授权（组件按次计费）</text>
+        <text class="meta">换绑需重新授权</text>
       </view>
     </view>
     <button wx:else class="phone-btn" open-type="getPhoneNumber" bindgetphonenumber="onGetPhoneNumber" loading="{{bindingPhone}}" disabled="{{bindingPhone}}">绑定手机号</button>

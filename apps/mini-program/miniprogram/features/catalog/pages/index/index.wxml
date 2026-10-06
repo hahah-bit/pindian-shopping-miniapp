@@ -1,49 +1,11 @@
-<view class="page">
-  <view wx:if="{{isMock}}" class="source-banner">Mock 数据预览（platform/config.ts 可切换 api）</view>
-
-  <view wx:if="{{loading}}" class="state">正在加载在售商品…</view>
-
-  <view wx:elif="{{error}}" class="state error-state">
-    <text>{{error}}</text>
-    <button bindtap="retry" type="button">重试</button>
-  </view>
-
-  <view wx:elif="{{items.length === 0}}" class="state">
-    <text>暂无在售商品</text>
-    <text class="state-sub">商家上架后将在这里展示</text>
-    <button bindtap="retry" type="button">刷新</button>
-  </view>
-
-  <block wx:else>
-    <view
-      wx:for="{{items}}"
-      wx:key="id"
-      class="product-card"
-      data-id="{{item.id}}"
-      bindtap="openDetail"
-      hover-class="card-hover"
-    >
-      <view class="image-wrap">
-        <image
-          class="product-image {{item.imageFailed ? 'image-failed' : ''}}"
-          src="{{item.mainImageUrl}}"
-          mode="aspectFill"
-          lazy-load="{{true}}"
-          data-index="{{index}}"
-          binderror="onImageError"
-        />
-        <view wx:if="{{item.imageFailed}}" class="image-placeholder">图片加载失败</view>
-      </view>
-      <view class="product-info">
-        <text class="product-name">{{item.name}}</text>
-        <view class="price-row">
-          <text class="price-from">¥{{item.fromPriceText}}/份 起</text>
-          <text class="price-whole">整件 ¥{{item.wholePriceText}}</text>
-        </view>
-        <text class="stock {{item.soldOut ? 'sold-out' : ''}}">{{item.soldOut ? '已售罄' : '有货'}}</text>
-      </view>
-    </view>
-    <view wx:if="{{loadingMore}}" class="state-sub load-more">正在加载更多…</view>
-    <view wx:elif="{{!hasMore}}" class="state-sub load-more">没有更多了</view>
-  </block>
+<view class="page discover-page">
+ <view class="discover-head"><view class="discover-title">好东西，<text class="title-soft">一起买。</text></view><view class="subtitle">选一份刚刚好，让日常多一点好。</view>
+ <view class="search-field"><view class="search-icon"></view><input value="{{keyword}}" bindinput="onSearchInput" bindconfirm="search" confirm-type="search" maxlength="60" placeholder="搜索你想要的好物" placeholder-style="color:#6e6e73" /><button wx:if="{{keyword}}" class="search-clear" bindtap="clearSearch">清空</button></view>
+ <scroll-view scroll-x class="category-scroll" show-scrollbar="{{false}}"><view class="category-track"><view wx:for="{{categories}}" wx:key="id" class="category-pill {{category === item.id ? 'active' : ''}}" data-id="{{item.id}}" bindtap="selectCategory" hover-class="pressed" hover-stay-time="100">{{item.label}}</view></view></scroll-view></view>
+ <view wx:if="{{isMock}}" class="source-banner">演示预览数据</view><view class="collection-header"><text>{{keyword ? '搜索结果' : '为日常挑选'}}</text><text class="collection-count" wx:if="{{!loading}}">{{total}} 件好物</text></view>
+ <view wx:if="{{loading}}" class="product-grid"><view wx:for="{{[1,2,3,4]}}" wx:key="*this" class="skeleton-card"><view class="skeleton-photo"></view><view class="skeleton-line"></view><view class="skeleton-line short"></view></view></view>
+ <view wx:elif="{{error}}" class="state error-state"><text>{{error}}</text><button bindtap="retry">重新加载</button></view>
+ <view wx:elif="{{!items.length}}" class="state"><view class="empty-title">暂时没有找到</view><text>试试其他关键词或分类。</text><button bindtap="clearSearch">清空搜索</button></view>
+ <view wx:else class="product-grid"><view wx:for="{{items}}" wx:key="id" class="product-card" bindtap="openDetail" data-id="{{item.id}}" hover-class="pressed" hover-stay-time="100"><view class="product-photo"><image wx:if="{{item.mainImageUrl && !item.imageFailed}}" src="{{item.mainImageUrl}}" mode="aspectFill" lazy-load data-index="{{index}}" binderror="onImageError" /><view wx:else class="photo-placeholder">图片暂不可用</view><text wx:if="{{item.soldOut}}" class="photo-stock">已售罄</text></view><view class="product-info"><view class="product-name">{{item.name}}</view><view class="product-price"><text class="currency">¥</text>{{item.fromPriceText}}<text class="price-unit"> / 份起</text></view><view class="product-whole">整件 ¥{{item.wholePriceText}}</view></view></view></view>
+ <view wx:if="{{!loading && items.length}}" class="list-end">{{loadingMore ? '正在加载更多…' : hasMore ? '继续向上滑，发现更多' : '好物已全部呈现'}}</view>
 </view>
