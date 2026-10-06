@@ -8,7 +8,7 @@
 
 API 保持 `{data,requestId}` 包络。商品 GET `/api/mini/v1/products` 新增 keyword（trim 后≤60字符）及 category（fruit/snack/drink/other，可省略）；二者 AND，仅上架，page≥1，pageSize≤50。商品读视图与后台写入新增可选 category，旧客户端兼容。金额仍整数分。
 
-地址继续现有 AddressSaveRequest；定位为本地表单辅助，不新增地理位置服务。智能客服 GET `/api/mini/v1/ai-support/messages?before=ISO&pageSize=20`、POST `/api/mini/v1/ai-support/messages` `{clientMessageId:UUID,text:1..1000字符}`，用户 Bearer；只读本人消息，升序呈现最近页，nextBefore 可分页。发送返回 `{turn:{id,clientMessageId,text,reply,status,createdAt},replayed}`。未配置503 AI_NOT_CONFIGURED，异常502 AI_UNAVAILABLE，超时504 AI_TIMEOUT，进行中409 AI_BUSY，同键异文409 IDEMPOTENCY_CONFLICT，校验400。并发数据库租约、同用户每分钟最多10次新轮次，默认30秒模型超时，最多20条/8000字符历史，文本输出≤4000字。无管理员访问其他人 AI 历史接口。
+地址继续现有 AddressSaveRequest；定位为本地表单辅助，不新增地理位置服务。智能客服 GET `/api/mini/v1/ai-support/messages?before=本人轮次UUID&pageSize=20`、POST `/api/mini/v1/ai-support/messages` `{clientMessageId:UUID,text:1..1000字符}`，用户 Bearer；只读本人消息，升序呈现最近页，nextBefore 可分页。发送返回 `{turn:{id,clientMessageId,text,reply,status,createdAt},replayed}`。未配置503 AI_NOT_CONFIGURED，异常502 AI_UNAVAILABLE，超时504 AI_TIMEOUT，进行中409 AI_BUSY，同键异文409 IDEMPOTENCY_CONFLICT，校验400。并发数据库租约、同用户每分钟最多10次新轮次，默认30秒模型超时，最多20条/8000字符历史，文本输出≤4000字。无管理员访问其他人 AI 历史接口。
 
 ## 验收
 

@@ -6,3 +6,5 @@
 - 采用微信原生选点，不接第三方地图/逆地理编码，当前不需要另申请地图API Key。app.json声明位置用途与chooseLocation隐私能力。
 - **实际定位权限、用户小程序主体是否具备该能力、安卓定位服务及选择器返回均待真机确认**。未点击真实授权流程，不把模拟返回或表单截图记录为GPS验收通过。不可用时保留手动填写。
 - T013专项通过后全量，实际结果见所属任务verification。
+
+资料核验记录：2026-10-06尝试访问[微信chooseLocation文档](https://developers.weixin.qq.com/miniprogram/dev/api/location/wx.chooseLocation.html)及[app配置文档](https://developers.weixin.qq.com/miniprogram/dev/reference/configuration/app.html#requiredPrivateInfos)，本工具均返回不可打开；未声称网页或主体权限核验成功。接口调用/字段参考项目已安装的官方miniprogram-api-typings声明，并经开发者工具实际编译；主体申请资格和权限以真实后台/设备结果为准。
