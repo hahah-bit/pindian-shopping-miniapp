@@ -1,5 +1,9 @@
 # Pi 智能客服领域设计
 
+## T015模型修订（实现前）
+
+空tools为T013历史边界；本轮明确授权后按[F053 DDD](../F053-ai-catalog-guidance/ddd.md)仅增加AiCatalogPort/只读工具和AiTurn推荐快照/意图，不拥有商品或交易写权限。完成UPDATE同lease原子保存文本与元数据，失败清空。
+
 ## T014 Tab修订（实现前）
 
 复用[T014 DDD/UML](../../tasks/T014-support-companion/ddd.md)。页面由导航栈改为缓存Tab；onShow身份确认及本页请求版本控制归属前端应用状态，不改变AiTurn、数据库或模型适配器。发送/载入/分页迟到结果必须以同身份及当前版本为前提，不能跨用户写页面；隐藏时精灵静止。

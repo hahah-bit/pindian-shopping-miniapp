@@ -6,7 +6,7 @@ export async function eventually(work,timeout=15000){const until=Date.now()+time
 async function unusedPort(){const s=createServer();await new Promise(r=>s.listen(0,'127.0.0.1',r));const port=s.address().port;await new Promise(r=>s.close(r));return port;}
 export async function localStack(t,label,{extraEnv={}}={}){
  const local=parseEnv(readFileSync('.env','utf8'));const admin=new pg.Client({connectionString:process.env.PINDIAN_TEST_DATABASE_URL??local.DATABASE_URL});await admin.connect();
- const name=`pindian_${label}_${randomUUID().replaceAll('-','').slice(0,12)}`;assert.match(name,/^pindian_t01[013]_[a-f0-9]{12}$/);
+ const name=`pindian_${label}_${randomUUID().replaceAll('-','').slice(0,12)}`;assert.match(name,/^pindian_t01[0135]_[a-f0-9]{12}$/);
  const temp=mkdtempSync(join(tmpdir(),'pindian-local-'));const children=[];let db,sim;
  const stop=async(child)=>{if(!child||child.exitCode!==null)return;child.kill();await Promise.race([new Promise(r=>child.once('exit',r)),delay(3000)]);if(child.exitCode===null)child.kill('SIGKILL');};
  t.after(async()=>{for(const c of children)await stop(c);if(sim)await sim.close();if(db)await db.end();await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);await admin.end();assert.ok(resolve(temp).startsWith(resolve(tmpdir())+'\\pindian-local-')||resolve(temp).startsWith(resolve(tmpdir())+'/pindian-local-'));rmSync(temp,{recursive:true,force:true});});

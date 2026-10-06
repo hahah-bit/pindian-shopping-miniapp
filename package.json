@@ -43,6 +43,7 @@
     "release:preflight": "node --env-file=.env.production scripts/release/preflight.mjs",
     "release:rehearsal:init": "node scripts/release/rehearsal-init.mjs",
     "test:task:t013": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t013",
-    "test:task:t014": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t014"
+    "test:task:t014": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t014",
+    "test:task:t015": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t015"
   }
 }

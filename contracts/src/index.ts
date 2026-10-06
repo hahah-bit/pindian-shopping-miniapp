@@ -628,7 +628,16 @@ export interface AdminAuditLogItem {
 export interface RolePermissionMatrix {
   roles: Array<{ role: AdminRole; label: string; permissions: AdminPermission[] }>;
 }
-/** T013 F051：仅本人可访问的智能问答轮次，不包含业务执行权限。 */
+export type AiGuidanceIntent = 'general' | 'product_recommendation' | 'product_introduction';
+export interface AiProductRecommendation {
+  productId: string;
+  name: string;
+  description: string;
+  imageUrl: string | null;
+  /** 展示时参考份额价（整数分），不是可支付报价。 */
+  priceFromFen: number;
+}
+/** 仅本人可访问；导购只读，不包含业务执行权限。 */
 export interface AiSupportTurnView {
   id: string;
   clientMessageId: string;
@@ -636,5 +645,7 @@ export interface AiSupportTurnView {
   reply: string | null;
   status: 'pending' | 'completed' | 'failed';
   createdAt: string;
+  intent: AiGuidanceIntent;
+  recommendations: AiProductRecommendation[];
 }
 export interface AiSupportHistoryView {items: AiSupportTurnView[]; nextBefore: string | null;}

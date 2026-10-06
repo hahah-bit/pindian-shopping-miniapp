@@ -136,6 +136,12 @@ components:
     textColor: "{colors.secondary}"
   tab-navigation-selected:
     textColor: "{colors.primary}"
+  catalog-guidance-row:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    padding: "20rpx"
 ---
 
 # Design System: 拼单购物原生小程序
@@ -156,6 +162,8 @@ components:
 - 原生控件、短按压反馈、底部安全区共同支撑操作。
 
 抽取依据：`apps/mini-program/miniprogram/app.wxss`、`app.json`，以及 `features/catalog/pages/index/index.wxss`、`features/catalog/pages/detail/index.wxss`、对应 WXML，`features/address/pages/list/index.wxss`、`features/address/pages/form/index.wxss`、`features/profile/pages/index/index.wxss`、`features/ai-support/pages/chat/index.wxss`、`features/cs/pages/index/index.wxss`。方向依据为 `PRODUCT.md` 与 `.impeccable/surfaces/mini-storefront.md`。T014 有界合并另外核对 `features/orders/pages/index/index.wxss`、AI 对话 WXML/TS/JSON、`features/ai-support/components/spirit/` 与 `.impeccable/surfaces/support-companion.md`；只记录已实现扩展。
+
+T015 有界合并核对同一 AI 对话页的 WXML/WXSS/TS、`.impeccable/surfaces/ai-catalog-guidance.md` 与 `.impeccable/review/t015/` 的真实推荐、介绍、恢复、详情截图及独立界面夹具；新增客服导购行，不改变上述全局方向。
 
 原生开发者工具 iPhone 12/13 Pro 截图及 `.impeccable/review/finish-review.md` 提供观察依据；本文件未独立重跑渲染或检测器。安卓/GPS/帧率/深色模式/字体放大、真机以及原生 swiper 的减少动态效果行为仍待验。截图含个人信息，不作为本设计系统的可分发资产。
 
@@ -278,6 +286,14 @@ pending 在实际发送时说明“我想一想”，发送结束但回复尚未
 ### Share Selection & Order Sheet
 
 份额行展示份额、参考数量与价格；选中用浅蓝底和内描边，不使用仅有颜色的状态表达，文字也显示“已选”。下单面板的抬升入场为 320ms `cubic-bezier(.16,1,.3,1)`，由下方 100% 位移回到原位；遮罩入场为 220ms `ease-out`。面板滚动、关闭范围和安全区内边距遵循现有实现。
+
+### Catalog Guidance Row
+
+客服实际回答下的白色商品行复用 `catalog-guidance-row`，作为整行原生 button 打开固定商品详情；参考份额价与后端下单报价保持区分。行最小高 148rpx，图文间距 20rpx，行之间 12rpx；商品图为 112rpx 方形、16rpx 圆角、`aspectFill`，来自公开商品媒体，缺图或加载失败显示同尺寸浅灰“商品”占位，不补装饰位图。
+
+名称采用 28rpx/500、两行截断及长串换行；参考价为 27rpx/600、等宽数字，辅助标签为 22rpx/400 次级灰。深操作蓝“查看商品”采用 24rpx，与同级 view 的 8rpx CSS 箭头排列；箭头为 2rpx 顶/右边线旋转 45°，不依赖字符或图标字体。
+
+整行触摸透明度为 0.85，过渡为 120ms `ease-out`，不添加位移；页面手动关闭动效和 `prefers-reduced-motion: reduce` 均关闭本行 transition。无匹配时不添加空白商品卡，正常非商品问答保留纯文字。以上尺寸和状态是客服局部组件事实，不扩展为首页商品卡或全局价格字号；系统减少动效和安卓实际渲染仍待验。
 
 ### Photography & Native Gallery
 

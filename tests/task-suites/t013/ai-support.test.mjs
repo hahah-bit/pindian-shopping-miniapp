@@ -12,7 +12,7 @@ function setup({configured=true,reply=async()=> '你好，请在我的页面管�
   if(duplicate?.status==='completed')return{turn:duplicate,replayed:true};
   const turn=duplicate??{id:randomUUID(),userId,clientMessageId,text,reply:null,createdAt:now};turn.status='pending';turn.leaseId=randomUUID();if(!duplicate)rows.push(turn);return{turn,replayed:false};
  },list:async userId=>({items:rows.filter(x=>x.userId===userId),nextBefore:null}),finish:async(u,id,leaseId,reply)=>{const row=rows.find(x=>x.userId===u&&x.id===id&&x.leaseId===leaseId);if(!row)return false;row.reply=reply;row.status=reply===null?'failed':'completed';return true;}};
- const model={configured,reply:async input=>{calls++;return reply(input);}};
+ const model={configured,reply:async input=>{calls++;return{text:await reply(input),intent:'general',recommendations:[]};}};
  return{service:new AiSupportService({repository:repo,model,timeoutMs}),rows,calls:()=>calls};
 }
 test('F051 登录与输入边界，未配置不创建消息',async()=>{

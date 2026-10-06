@@ -2,6 +2,7 @@ import { AiSupportController } from '../contexts/customer-service/adapters/inbou
 import { AiSupportService } from '../contexts/customer-service/application/ai-support/service';
 import { PostgresAiSupportRepository } from '../contexts/customer-service/adapters/outbound/postgres/ai-support-repository';
 import { PiReplyAdapter, piSupportConfig } from '../contexts/customer-service/adapters/outbound/pi/pi-reply-adapter';
+import { AiCatalogRead } from '../workflows/ai-catalog-read';
 import { Module } from '@nestjs/common';
 import { APP_GUARD, Reflector } from '@nestjs/core';
 import { Pool } from 'pg';
@@ -197,7 +198,7 @@ import { TOKENS } from './injection-tokens';
     AuditController,
   ],
   providers: [
-    {provide:AiSupportService,useFactory:(pool:Pool)=>new AiSupportService({repository:new PostgresAiSupportRepository(pool),model:new PiReplyAdapter(piSupportConfig())}),inject:[TOKENS.PgPool]},
+    {provide:AiSupportService,useFactory:(pool:Pool,catalog:MiniCatalogQueries)=>new AiSupportService({repository:new PostgresAiSupportRepository(pool),model:new PiReplyAdapter(piSupportConfig(),new AiCatalogRead(catalog))}),inject:[TOKENS.PgPool,MiniCatalogQueries]},
     { provide: TOKENS.PgPool, useFactory: () => new Pool({ connectionString: readConfig().databaseUrl, max: 10 }) },
     { provide: TOKENS.Clock, useFactory: () => new SystemClock() },
     { provide: 'CLOCK', useExisting: TOKENS.Clock },

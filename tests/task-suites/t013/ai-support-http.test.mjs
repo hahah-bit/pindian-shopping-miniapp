@@ -18,14 +18,14 @@ async function modelServer(t){
  });await new Promise(r=>server.listen(0,'127.0.0.1',r));t.after(()=>new Promise(r=>server.close(r)));
  return{requests,url:'http://127.0.0.1:'+server.address().port+'/v1'};
 }
-test('F051 真实HTTP/PG/Pi内核：鉴权、重放、跨用户隔离、无工具、页面发送与历史',async t=>{
+test('F051 真实HTTP/PG/Pi内核：鉴权、重放、跨用户隔离、仅公开商品工具、页面发送与历史',async t=>{
  const model=await modelServer(t);const s=await localStack(t,'t013',{extraEnv:{AI_SUPPORT_API_KEY:'test-local-only',AI_SUPPORT_BASE_URL:model.url,AI_SUPPORT_MODEL:'support-test'}});
  const a=await s.login('alice'),b=await s.login('bob');const path='/mini/v1/ai-support/messages';
  await s.http(path,{status:401});await s.http(path,{token:s.superToken,status:401});
  await s.http(path,{token:a.token,method:'POST',body:{text:'',clientMessageId:randomUUID()},status:400});
  const id=randomUUID(),body={text:'我的手机号13800001234，怎么填地址？',clientMessageId:id};
  const first=await s.http(path,{token:a.token,method:'POST',body});assert.equal(first.turn.status,'completed');assert.equal(model.requests.length,1);
- assert.equal(JSON.stringify(model.requests[0]).includes('13800001234'),false);assert.ok(!model.requests[0].tools?.length);
+ assert.equal(JSON.stringify(model.requests[0]).includes('13800001234'),false);assert.deepEqual(model.requests[0].tools.map(x=>x.function.name),['search_catalog']);assert.deepEqual(first.turn.recommendations,[]);assert.equal(first.turn.intent,'general');
  const replay=await s.http(path,{token:a.token,method:'POST',body});assert.equal(replay.turn.id,first.turn.id);assert.equal(model.requests.length,1);
  await s.http(path,{token:a.token,method:'POST',body:{...body,text:'换内容'},status:409});
  assert.equal((await s.http(path,{token:b.token})).items.length,0);

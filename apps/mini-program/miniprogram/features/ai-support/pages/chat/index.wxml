@@ -1,7 +1,7 @@
 <view class="chat-shell {{reducedMotion ? 'still' : ''}}" style="padding-bottom: {{keyboardHeight}}px">
   <view class="chat-top">
     <support-spirit wx:if="{{messages.length}}" compact active="{{visible}}" thinking="{{sending}}" reduced-motion="{{reducedMotion}}"/>
-    <view class="chat-heading"><text class="chat-title">{{messages.length ? '小蓝 · AI 客服' : '聊聊你的问题。'}}</text><text class="chat-caption">拼单规则、操作指南，都可以问我。</text></view>
+    <view class="chat-heading"><text class="chat-title">{{messages.length ? '小蓝 · AI 客服' : '聊聊你的问题。'}}</text><text class="chat-caption">选商品、问拼单，都可以。</text></view>
     <button class="human-link" bindtap="human">人工与售后</button>
   </view>
   <scroll-view class="conversation" scroll-y scroll-into-view="{{scrollTarget}}" scroll-with-animation="{{!reducedMotion}}" enhanced>
@@ -15,10 +15,10 @@
         <button wx:if="{{nextBefore}}" class="history-button" bindtap="older" loading="{{olderLoading}}" disabled="{{olderLoading}}">更早的对话</button>
         <view wx:if="{{!messages.length}}" class="welcome">
           <support-spirit active="{{visible}}" reduced-motion="{{reducedMotion}}"/>
-          <text class="welcome-title">你好，我是小蓝。</text><text class="welcome-copy">想怎么拼、地址怎么填？
+          <text class="welcome-title">你好，我是小蓝。</text><text class="welcome-copy">想买点什么、怎么拼单？
 从一个小问题开始吧。</text>
           <view class="quick-questions">
-            <button data-text="怎么参与拼单？" bindtap="quick">怎么参与拼单</button><button data-text="怎么添加收货地址？" bindtap="quick">添加收货地址</button><button data-text="怎么查看订单？" bindtap="quick">怎么查看订单</button><button data-text="退款找谁处理？" bindtap="quick">退款找谁处理</button>
+            <button data-text="有推荐的咖啡么？" bindtap="quick">推荐一款咖啡</button><button data-text="介绍一下现在的水果商品" bindtap="quick">看看水果商品</button><button data-text="怎么参与拼单？" bindtap="quick">怎么参与拼单</button><button data-text="怎么添加收货地址？" bindtap="quick">添加收货地址</button>
           </view>
         </view>
         <view wx:for="{{messages}}" wx:key="clientMessageId" id="turn-{{item.clientMessageId}}" class="turn">
@@ -28,6 +28,13 @@
             <text wx:if="{{item.reply}}" class="reply-text" selectable>{{item.reply}}</text>
             <view wx:elif="{{item.status === 'pending'}}" class="pending-text"><view wx:if="{{sending}}" class="thinking-dots {{visible && !reducedMotion ? 'moving' : ''}}"><view></view><view></view><view></view></view><text>{{sending ? '我想一想，稍等一下…' : '回复还未确认，刷新查看或重试。'}}</text></view>
             <text wx:else class="pending-text">这次没收到回复，你可以再试一次。</text>
+          </view>
+          <view wx:if="{{item.cards.length}}" class="product-links">
+            <button wx:for="{{item.cards}}" wx:for-item="product" wx:key="productId" class="recommended-product" data-product-id="{{product.productId}}" bindtap="openProduct" hover-class="product-pressed">
+              <image wx:if="{{product.imageUrl && !product.imageFailed}}" class="recommendation-image" src="{{product.imageUrl}}" mode="aspectFill" data-turn-id="{{item.clientMessageId}}" data-product-id="{{product.productId}}" binderror="productImageFailed"/>
+              <view wx:else class="recommendation-image image-placeholder">商品</view>
+              <view class="recommendation-info"><text class="recommendation-name">{{product.name}}</text><text class="recommendation-price">¥{{product.priceText}} 起 <text class="reference-label">参考份额价</text></text><view class="recommendation-action"><text>查看商品</text><view class="recommendation-arrow"></view></view></view>
+            </button>
           </view>
           <button wx:if="{{item.status !== 'completed' && !sending}}" class="retry-button" data-id="{{item.clientMessageId}}" bindtap="retryTurn">重试这条消息</button>
         </view>

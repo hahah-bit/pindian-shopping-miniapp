@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-06T14:21:33Z",
+  "generatedAt": "2026-10-06T14:54:58Z",
   "title": "Design System: 拼单购物原生小程序",
   "extensions": {
     "colorMeta": {
@@ -181,6 +181,11 @@
         "name": "support-motion-gate",
         "value": "visible && !reducedMotion",
         "purpose": "控制精灵和思考三点；onHide设visible=false。页面手动开关另停回复入场与scroll-with-animation；CSS系统分支仅停动画，实际Android支持/帧率待验。"
+      },
+      {
+        "name": "catalog-guidance-press",
+        "value": "opacity 120ms ease-out",
+        "purpose": "客服商品行原生hover-class将opacity置为.85；页面手动关闭动效与prefers-reduced-motion分支关闭transition，不新增位移。安卓系统支持待验。"
       }
     ],
     "breakpoints": []
@@ -303,6 +308,14 @@
       "description": "原生view原创几何的375px待命预览，90×94px，紧凑变体40×42px。实际thinking由sending控制，hidden或手动reducedMotion静止；预览没有请求、页面生命周期或系统动效验证能力。影色只属本组件。",
       "html": "<div class=\"ds-spirit\" aria-hidden=\"true\"><div class=\"ds-antenna\"><div class=\"ds-tip\"></div></div><div class=\"ds-spirit-body\"><div class=\"ds-eye ds-eye-left\"></div><div class=\"ds-eye ds-eye-right\"></div><div class=\"ds-smile\"></div><div class=\"ds-hand\"></div></div><div class=\"ds-shadow\"></div></div>",
       "css": ".ds-spirit{position:relative;width:90px;height:94px;margin:0 auto}.ds-spirit-body{position:absolute;top:16px;left:10.5px;width:69px;height:63px;background:#0071e3;border-radius:24px 24px 21px 21px;transform:rotate(-4deg);animation:ds-float 4.8s ease-in-out infinite}.ds-eye{position:absolute;top:21.5px;width:6px;height:10.5px;background:#fff;border-radius:5px;transform-origin:center;animation:ds-blink 5.6s linear infinite}.ds-eye-left{left:22px}.ds-eye-right{right:19px}.ds-smile{position:absolute;left:30.5px;top:39px;width:9px;height:4.5px;border-bottom:1.5px solid #fff;border-radius:0 0 8px 8px}.ds-hand{position:absolute;right:-5.5px;top:37px;width:10px;height:17.5px;background:#0071e3;border-radius:8px;transform:rotate(-28deg);animation:ds-wave 9s ease-in-out infinite}.ds-antenna{position:absolute;left:46.5px;top:6.5px;width:2px;height:13px;background:#0071e3;transform:rotate(12deg);animation:ds-float 4.8s ease-in-out infinite}.ds-tip{position:absolute;left:-2.5px;top:-1.5px;width:7px;height:7px;border-radius:50%;background:#0071e3}.ds-shadow{position:absolute;left:26px;bottom:5.5px;width:38px;height:4px;background:#dfe8f1;border-radius:50%}@keyframes ds-float{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-2.5px) rotate(-2deg)}}@keyframes ds-blink{0%,42%,46%,49%,53%,100%{transform:scaleY(1)}44%,51%{transform:scaleY(.12)}}@keyframes ds-wave{0%,8%,100%{transform:rotate(-28deg)}3%,6%{transform:rotate(-46deg)}}@media(prefers-reduced-motion:reduce){.ds-spirit-body,.ds-antenna,.ds-eye,.ds-hand{animation:none}}"
+    },
+    {
+      "name": "客服商品导购行",
+      "kind": "button",
+      "refersTo": "catalog-guidance-row",
+      "description": "实际原生商品行的375px转译：整行固定详情入口，照片来自公开媒体；此预览以同尺寸占位示意图片失败，无请求/路由/库存与报价能力。焦点沿浏览器默认，hover/active模拟原生按压。",
+      "html": "<button class=\"ds-guidance\"><span class=\"ds-guidance-image\">商品</span><span class=\"ds-guidance-info\"><span class=\"ds-guidance-name\">[体验] 咖啡豆</span><span class=\"ds-guidance-price\">¥20.60 起 <span class=\"ds-guidance-reference\">参考份额价</span></span><span class=\"ds-guidance-action\"><span>查看商品</span><span class=\"ds-guidance-arrow\" aria-hidden=\"true\"></span></span></span></button>",
+      "css": ".ds-guidance{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;margin:0;width:100%;min-height:74px;padding:10px;display:flex;align-items:center;gap:10px;box-sizing:border-box;text-align:left;background:#fff;color:#1d1d1f;border:0;border-radius:12px;line-height:1.5;transition:opacity 120ms ease-out}.ds-guidance:hover,.ds-guidance:active{opacity:.85}.ds-guidance:focus-visible{outline:revert}.ds-guidance-image{flex:none;width:56px;height:56px;border-radius:8px;overflow:hidden;background:#f5f5f7;display:flex;align-items:center;justify-content:center;color:#6e6e73;font-size:12.5px}.ds-guidance-info{flex:1;min-width:0}.ds-guidance-name{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:14px;font-weight:500;overflow-wrap:anywhere}.ds-guidance-price{display:block;margin-top:3.5px;font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums}.ds-guidance-reference{font-size:11px;color:#6e6e73;font-weight:400;margin-left:4px}.ds-guidance-action{display:flex;align-items:center;gap:4px;margin-top:4px;font-size:12px;color:#0066cc}.ds-guidance-arrow{width:4px;height:4px;border-top:1px solid #0066cc;border-right:1px solid #0066cc;transform:rotate(45deg)}.ds-guidance.ds-still{transition:none}@media(prefers-reduced-motion:reduce){.ds-guidance{transition:none}}"
     }
   ],
   "narrative": {

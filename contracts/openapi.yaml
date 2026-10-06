@@ -2676,7 +2676,7 @@ components:
 
     AiSupportTurn:
       type: object
-      required: [id, clientMessageId, text, reply, status, createdAt]
+      required: [id, clientMessageId, text, reply, status, createdAt, intent, recommendations]
       properties:
         id: {type: string, format: uuid}
         clientMessageId: {type: string, format: uuid}
@@ -2684,3 +2684,14 @@ components:
         reply: {type: string, maxLength: 4000, nullable: true}
         status: {type: string, enum: [pending, completed, failed]}
         createdAt: {type: string, format: date-time}
+        intent: {type: string, enum: [general, product_recommendation, product_introduction]}
+        recommendations: {type: array, maxItems: 3, items: {$ref: '#/components/schemas/AiProductRecommendation'}}
+    AiProductRecommendation:
+      type: object
+      required: [productId, name, description, imageUrl, priceFromFen]
+      properties:
+        productId: {type: string, format: uuid}
+        name: {type: string, minLength: 1, maxLength: 60}
+        description: {type: string, maxLength: 600}
+        imageUrl: {type: string, nullable: true}
+        priceFromFen: {type: integer, minimum: 0, description: '展示时参考份额价，整数分，不是支付报价'}

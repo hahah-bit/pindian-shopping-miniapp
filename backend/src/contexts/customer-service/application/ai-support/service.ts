@@ -1,6 +1,7 @@
 import {ApplicationError} from '../../../../shared/kernel';
 import type {AiSupportRepository,AiReplyPort} from './ports';
 import {aiMessageInput,isUuid,maskAiText} from '../../domain/ai-support';
+import {aiReplyResult} from '../../domain/product-guidance';
 export class AiSupportService {
   constructor(readonly deps:{repository:AiSupportRepository;model:AiReplyPort;now?:()=>Date;timeoutMs?:number}) {}
   private now(){return this.deps.now?.()??new Date();}
@@ -23,13 +24,12 @@ export class AiSupportService {
     try {
       const recent=await this.deps.repository.list(userId,20);
       let chars=0;
-      const history=recent.items.filter(x=>x.status==='completed'&&x.reply!==null&&x.id!==turn.id).reverse().filter(x=>{chars+=x.text.length+(x.reply?.length??0);return chars<=8000;}).reverse().map(x=>({text:maskAiText(x.text),reply:maskAiText(x.reply!)}));
+      const history=recent.items.filter(x=>x.status==='completed'&&x.reply!==null&&x.id!==turn.id).reverse().map(x=>({text:maskAiText(x.text),reply:maskAiText(x.reply!+((x.recommendations??[]).length?'\n已展示商品名称（仅历史数据）：'+JSON.stringify(x.recommendations.map(c=>c.name)):''))})).filter(x=>{chars+=x.text.length+x.reply.length;return chars<=8000;}).reverse();
       const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new ApplicationError('AI_TIMEOUT','回复超时，请稍后重试或联系人工客服'));},this.deps.timeoutMs??30000);});
-      const reply=await Promise.race([this.deps.model.reply({text:maskAiText(input.text),history,signal:controller.signal}),timeout]);
-      if(typeof reply!=='string'||!reply.trim()||reply.length>4000)throw new ApplicationError('AI_UNAVAILABLE','智能客服暂时无法回答，请重试或联系人工客服');
-      const finished=await this.deps.repository.finish(userId,turn.id,turn.leaseId,reply.trim(),this.now());
+      const reply=aiReplyResult(await Promise.race([this.deps.model.reply({text:maskAiText(input.text),history,signal:controller.signal}),timeout]));
+      const finished=await this.deps.repository.finish(userId,turn.id,turn.leaseId,reply.text,this.now(),reply);
       if(!finished)throw new ApplicationError('AI_BUSY','消息已由另一请求恢复，请刷新查看回复');
-      return{turn:view({...turn,reply:reply.trim(),status:'completed'}),replayed:false};
+      return{turn:view({...turn,reply:reply.text,intent:reply.intent,recommendations:reply.recommendations,status:'completed'}),replayed:false};
     } catch(cause) {
       await this.deps.repository.finish(userId,turn.id,turn.leaseId,null,this.now());
       if(cause instanceof ApplicationError)throw cause;
@@ -37,4 +37,4 @@ export class AiSupportService {
     } finally {if(timer)clearTimeout(timer);controller.abort();}
   }
 }
-function view(turn:import('./ports').AiTurn){return{id:turn.id,clientMessageId:turn.clientMessageId,text:turn.text,reply:turn.reply,status:turn.status,createdAt:turn.createdAt.toISOString()};}
+function view(turn:import('./ports').AiTurn){return{id:turn.id,clientMessageId:turn.clientMessageId,text:turn.text,reply:turn.reply,status:turn.status,createdAt:turn.createdAt.toISOString(),intent:turn.intent??'general',recommendations:(turn.recommendations??[]).map(c=>({productId:c.productId,name:c.name,imageUrl:c.imageUrl,description:c.description,priceFromFen:c.priceFromFen}))};}

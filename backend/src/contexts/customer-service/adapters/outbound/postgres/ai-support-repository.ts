@@ -1,9 +1,9 @@
 import {randomUUID} from 'node:crypto';
 import type {Pool} from 'pg';
 import {ApplicationError} from '../../../../../shared/kernel';
-import type {AiSupportRepository,AiTurn} from '../../../application/ai-support/ports';
-type Row={id:string;user_id:string;client_message_id:string;text:string;reply:string|null;status:AiTurn['status'];lease_id:string;created_at:Date};
-const turn=(r:Row):AiTurn=>({id:r.id,userId:r.user_id,clientMessageId:r.client_message_id,text:r.text,reply:r.reply,status:r.status,leaseId:r.lease_id,createdAt:r.created_at});
+import type {AiSupportRepository,AiTurn,AiReplyResult} from '../../../application/ai-support/ports';
+type Row={id:string;user_id:string;client_message_id:string;text:string;reply:string|null;status:AiTurn['status'];lease_id:string;created_at:Date;intent:AiTurn['intent'];recommendations:AiTurn['recommendations']};
+const turn=(r:Row):AiTurn=>({id:r.id,userId:r.user_id,clientMessageId:r.client_message_id,text:r.text,reply:r.reply,status:r.status,leaseId:r.lease_id,createdAt:r.created_at,intent:r.intent??'general',recommendations:r.recommendations??[]});
 export class PostgresAiSupportRepository implements AiSupportRepository {
  constructor(private readonly pool:Pool){}
  async claim(input:{userId:string;clientMessageId:string;text:string;now:Date;leaseUntil:Date}){
@@ -21,7 +21,7 @@ export class PostgresAiSupportRepository implements AiSupportRepository {
    if(!reset&&state.window_requests>=10)throw new ApplicationError('RATE_LIMITED','咨询较频繁，请一分钟后再试');
    await c.query('UPDATE ai_support_conversations SET window_started_at=$2,window_requests=$3 WHERE user_id=$1',[input.userId,reset?input.now:state!.window_started_at,reset?1:state!.window_requests+1]);
    const leaseId=randomUUID();let row:Row;
-   if(duplicate){const r=await c.query<Row>('UPDATE ai_support_turns SET status=\'pending\',reply=NULL,lease_id=$3,lease_expires_at=$4,updated_at=$5 WHERE user_id=$1 AND id=$2 RETURNING *',[input.userId,duplicate.id,leaseId,input.leaseUntil,input.now]);row=r.rows[0]!;}
+   if(duplicate){const r=await c.query<Row>('UPDATE ai_support_turns SET status=\'pending\',reply=NULL,intent=\'general\',recommendations=\'[]\'::jsonb,lease_id=$3,lease_expires_at=$4,updated_at=$5 WHERE user_id=$1 AND id=$2 RETURNING *',[input.userId,duplicate.id,leaseId,input.leaseUntil,input.now]);row=r.rows[0]!;}
    else {const r=await c.query<Row>('INSERT INTO ai_support_turns(id,user_id,client_message_id,text,status,lease_id,lease_expires_at,created_at,updated_at) VALUES($1,$2,$3,$4,\'pending\',$5,$6,$7,$7) RETURNING *',[randomUUID(),input.userId,input.clientMessageId,input.text,leaseId,input.leaseUntil,input.now]);row=r.rows[0]!;}
    await c.query('COMMIT');return{turn:turn(row),replayed:false};
   }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
@@ -34,7 +34,7 @@ export class PostgresAiSupportRepository implements AiSupportRepository {
   const {rows}=await this.pool.query<Row>(`SELECT * FROM ai_support_turns WHERE user_id=$1 ${condition} ORDER BY created_at DESC,id DESC LIMIT $2`,params);
   const selected=rows.slice(0,limit).reverse();return{items:selected.map(turn),nextBefore:rows.length>limit?selected[0]!.id:null};
  }
- async finish(userId:string,id:string,leaseId:string,reply:string|null,now:Date){
-  const r=await this.pool.query('UPDATE ai_support_turns SET reply=$4,status=$5,updated_at=$6 WHERE user_id=$1 AND id=$2 AND lease_id=$3 AND status=\'pending\'',[userId,id,leaseId,reply,reply===null?'failed':'completed',now]);return r.rowCount===1;
+ async finish(userId:string,id:string,leaseId:string,reply:string|null,now:Date,metadata?:Pick<AiReplyResult,'intent'|'recommendations'>){
+  const r=await this.pool.query('UPDATE ai_support_turns SET reply=$4,status=$5,updated_at=$6,intent=$7,recommendations=$8::jsonb WHERE user_id=$1 AND id=$2 AND lease_id=$3 AND status=\'pending\'',[userId,id,leaseId,reply,reply===null?'failed':'completed',now,reply===null?'general':metadata?.intent??'general',JSON.stringify(reply===null?[]:metadata?.recommendations??[])]);return r.rowCount===1;
  }
 }

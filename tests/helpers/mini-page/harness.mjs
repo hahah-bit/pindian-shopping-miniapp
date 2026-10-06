@@ -11,6 +11,7 @@ export function miniHarness(stack,{user='alice',payScenario='success'}={}){
   requestPayment:o=>{track(async()=>{if(payScenario==='cancel'||payScenario==='fail'){o.fail?.({errMsg:payScenario==='cancel'?'requestPayment:fail cancel':'requestPayment:fail'});return;}if(payScenario==='success'){const no=o.package.replace('prepay_id=sim-','');await stack.control({action:'payment-state',outTradeNo:no,tradeState:'SUCCESS'});}o.success?.({errMsg:'requestPayment:ok'});});},
   showToast:o=>events.push({kind:'toast',...o}),showModal:o=>{events.push({kind:'modal',...o});o.success?.({confirm:true});},
   navigateTo:o=>events.push({kind:'navigate',...o}),redirectTo:o=>events.push({kind:'redirect',...o}),navigateBack:()=>{},stopPullDownRefresh:()=>{},
+  setNavigationBarTitle:o=>events.push({kind:'navigation-title',...o}),
  };
  const interval=(fn,ms)=>{const timer=setInterval(fn,ms);timers.add(timer);return timer;};
  function load(file){const path=resolve(file);if(!path.startsWith(root+sep))throw Error('模块越过小程序范围');if(path===resolve(root,'platform/config.ts'))return{apiConfig:{mode:'api',baseUrl:stack.base}};if(cache.has(path))return cache.get(path).exports;const module={exports:{}};cache.set(path,module);let definition;
