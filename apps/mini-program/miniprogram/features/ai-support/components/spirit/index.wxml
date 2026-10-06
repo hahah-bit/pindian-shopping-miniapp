@@ -1,0 +1,5 @@
+<view class="spirit {{compact ? 'compact' : ''}} {{active && !reducedMotion ? 'moving' : ''}} {{thinking ? 'thinking' : ''}}" aria-hidden="true">
+  <view class="antenna"><view class="antenna-tip"></view></view>
+  <view class="body"><view class="face"><view class="eye left"></view><view class="eye right"></view><view class="smile"></view></view><view class="hand"></view></view>
+  <view class="shadow"></view>
+</view>

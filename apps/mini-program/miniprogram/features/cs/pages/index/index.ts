@@ -62,7 +62,7 @@ Page({
   retry() {
     void this.load();
   },
-  openAi(){wx.navigateTo({url:'/features/ai-support/pages/chat/index'});},
+  openAi(){wx.switchTab({url:'/features/ai-support/pages/chat/index'});},
   create(){wx.navigateTo({url:'/features/cs/pages/ticket-form/index'});},
   openTicket(e:WechatMiniprogram.TouchEvent){wx.navigateTo({url:`/features/cs/pages/ticket-detail/index?id=${e.currentTarget.dataset.id}`});},
   async moreTickets(){try{const r=await listMyTickets(this.data.ticketPage+1);this.setData({ticketPage:this.data.ticketPage+1,tickets:[...this.data.tickets,...r.items.map(t=>({id:t.id,title:t.title,typeText:TICKET_TYPE_TEXT[t.type]??t.type,statusText:TICKET_STATUS_TEXT[t.status]??t.status}))]});}catch(e){wx.showToast({title:e instanceof Error?e.message:'读取失败',icon:'none'});}},

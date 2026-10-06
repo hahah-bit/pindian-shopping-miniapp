@@ -122,7 +122,7 @@ Page({
     }
   },
 
-  openSupport() { wx.navigateTo({url:'/features/cs/pages/index/index'}); },
+  openSupport() { wx.switchTab({url:'/features/ai-support/pages/chat/index'}); },
 
   openAddresses() {
     if (!this.data.user) {

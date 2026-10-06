@@ -1,5 +1,7 @@
 # Pi 智能客服实施
 
+T014修订：先用实际页面装置验证缓存Tab再次进入及异步身份竞争，保留业务红灯；再增加onShow/onHide、loading版本、发送版本和分页身份保护，改旧入口为switchTab。新状态投影交给F052组件；专项test:task:t014后npm test，记录独立原生渲染与待验项。不改后端或持久结构。
+
 SDK 的公开子路径只导出 ESM；后端 TypeScript 编译配置采用 NodeNext 模块解析（项目既定 Node24），既有 Nest 源码仍编译为 CommonJS，Pi 适配器使用原生动态 import，不通过 coding-agent 读取全局工具/配置。类型导入明确 import resolution-mode。Node16 解析不支持现有 Nest ESM 的 Node24 require 互操作，因此未采用。此装配变更需全量构建和测试验证。
 
 依赖 [DDD](ddd.md)、[spec](spec.md)，覆盖 AC05/06。

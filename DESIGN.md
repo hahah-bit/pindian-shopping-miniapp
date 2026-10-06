@@ -15,6 +15,7 @@ colors:
   stroke: "#d2d2d7"
   divider: "#e9e9ed"
   error: "#b42318"
+  danger-soft: "#fff1f0"
   warning-text: "#a06724"
   warning-soft: "#fdf1e3"
 typography:
@@ -80,8 +81,23 @@ components:
     rounded: "{rounded.control}"
   button-ghost:
     backgroundColor: "transparent"
-    textColor: "{colors.primary}"
-    padding: "0 16rpx"
+    textColor: "{colors.primary-text}"
+    padding: "0 12rpx"
+  button-secondary:
+    backgroundColor: "{colors.background}"
+    textColor: "{colors.body-secondary}"
+    rounded: "{rounded.share-option}"
+    padding: "0 20rpx"
+  button-edit:
+    backgroundColor: "transparent"
+    textColor: "{colors.body-secondary}"
+    rounded: "{rounded.share-option}"
+    padding: "0 20rpx"
+  button-danger:
+    backgroundColor: "{colors.danger-soft}"
+    textColor: "{colors.error}"
+    rounded: "{rounded.share-option}"
+    padding: "0 20rpx"
   search-field:
     backgroundColor: "{colors.divider}"
     textColor: "{colors.ink}"
@@ -93,8 +109,7 @@ components:
     backgroundColor: "{colors.background}"
     textColor: "{colors.ink}"
     rounded: "{rounded.control}"
-    padding: "0 24rpx"
-    height: "96rpx"
+    padding: "26rpx 24rpx"
   card:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.card}"
@@ -140,7 +155,7 @@ components:
 - 黑灰文字分层，蓝色集中于交互及其选中反馈。
 - 原生控件、短按压反馈、底部安全区共同支撑操作。
 
-抽取依据：`apps/mini-program/miniprogram/app.wxss`、`app.json`，以及 `features/catalog/pages/index/index.wxss`、`features/catalog/pages/detail/index.wxss`、对应 WXML，`features/address/pages/list/index.wxss`、`features/address/pages/form/index.wxss`、`features/profile/pages/index/index.wxss`、`features/ai-support/pages/chat/index.wxss`、`features/cs/pages/index/index.wxss`。方向依据为 `PRODUCT.md` 与 `.impeccable/surfaces/mini-storefront.md`。
+抽取依据：`apps/mini-program/miniprogram/app.wxss`、`app.json`，以及 `features/catalog/pages/index/index.wxss`、`features/catalog/pages/detail/index.wxss`、对应 WXML，`features/address/pages/list/index.wxss`、`features/address/pages/form/index.wxss`、`features/profile/pages/index/index.wxss`、`features/ai-support/pages/chat/index.wxss`、`features/cs/pages/index/index.wxss`。方向依据为 `PRODUCT.md` 与 `.impeccable/surfaces/mini-storefront.md`。T014 有界合并另外核对 `features/orders/pages/index/index.wxss`、AI 对话 WXML/TS/JSON、`features/ai-support/components/spirit/` 与 `.impeccable/surfaces/support-companion.md`；只记录已实现扩展。
 
 原生开发者工具 iPhone 12/13 Pro 截图及 `.impeccable/review/finish-review.md` 提供观察依据；本文件未独立重跑渲染或检测器。安卓/GPS/帧率/深色模式/字体放大、真机以及原生 swiper 的减少动态效果行为仍待验。截图含个人信息，不作为本设计系统的可分发资产。
 
@@ -164,6 +179,7 @@ components:
 - **次级灰**（`secondary`）：辅助说明、占位、计数和未选导航。
 - **弱化灰与分隔灰**（`muted`、`stroke`、`divider`）：弱化提示、细描边、行分隔、搜索底与禁用按钮。
 - **异常红**（`error`）：请求错误、表单错误和危险操作文字。
+- **浅红语义底**（`danger-soft`）：地址删除按钮与 AI 请求错误条的承载面，不用于主要动作。
 - **状态棕及浅棕底**（`warning-text`、`warning-soft`）：售罄与未绑定等状态。它们不是第二品牌色。
 
 **The 操作有色 Rule.** 蓝色表示操作或与操作相关的选择状态；商品摄影保留其真实色彩，价格保持近黑色。
@@ -182,7 +198,7 @@ components:
 
 - **Display**（`display`）：首页主标题，两行黑灰层级。
 - **Headline**（`headline`）：全局标题及地址页标题。我的页实际为 52rpx，详情商品名为 42rpx；这些是页面变体，不能互换为统一字号。
-- **Title**（`title`）：共用分区标题；商品集合标题使用 34rpx，AI 对话标题及下单面板标题使用 36rpx。
+- **Title**（`title`）：共用分区标题及 AI 对话标题；商品集合标题使用 34rpx，下单面板标题使用 36rpx。AI 空态标题使用 44rpx、字重 600，是局部变体。
 - **Price**（`price`）：首页份额起价。详情份额起价同为 38rpx、字重 600，但未沿用首页负字距；整件参考价为 34rpx、字重 700。
 - **Body**（`body`）：正文、输入与全局按钮。商品名称为 28rpx、字重 500、行高 1.45，限制两行。
 - **Label**（`label`）：共用状态与提示；页面辅助文字还实际使用 20–26rpx，按原有用途保留，不一律降为最小字号。
@@ -196,7 +212,7 @@ components:
 
 通用卡片间距为 `section`，内边距依场景为 26/28/32rpx。首页商品照片高 340rpx，详情轮播高 650rpx并使用 `aspectFill`；图像失败回落到文字占位。商品卡片信息内边距为 22rpx 22rpx 26rpx。不要把首页两列或详情图高提升为所有页面的固定模板。
 
-详情页面底部留 200rpx，固定操作栏与 AI 输入栏使用 `env(safe-area-inset-bottom)`。下单面板最多 80vh，可纵向滚动。AI 对话使用 flex 纵向容器，消息区滚动，实际键盘高度以 px 输入容器内边距；这是平台事件单位，与布局 rpx 分工不同。
+详情页面底部留 200rpx，固定操作栏使用 `env(safe-area-inset-bottom)`。下单面板最多 80vh，可纵向滚动。AI 对话成为原生 Tab 后由微信 Tab 处理底部安全区，输入栏只使用 16rpx 24rpx 内边距，不重复叠加 `env`。对话使用 flex 纵向容器，消息区滚动；键盘高度事件以 px 输入容器内边距，原生 textarea 关闭自动顶起，事件单位与布局 rpx 分工不同。当前截图中的键盘高度为注入事件，实际 IME 尚未验证。
 
 按钮、搜索、分类、份额行、小型关闭与昵称操作的主要触摸尺寸在代码中至少为 96rpx；我的页入口行实际为 104rpx。实机键盘、字体放大和安卓安全区仍需验证。
 
@@ -227,6 +243,8 @@ components:
 
 蓝色实心表达主要动作，浅蓝位置按钮与透明人工入口承担辅助动作。全局按钮为 `button-primary`，最小高 96rpx，默认上间距 24rpx；局部发送、定位或入口样式会覆盖尺寸和间距。禁用态由原生 `disabled` 属性映射为灰底灰字，loading 与禁用共同防止重复提交。
 
+地址默认与订单取消使用 `button-secondary` 中性浅灰，地址编辑使用 `button-edit` 透明文字，地址删除使用 `button-danger` 浅红底与异常红文字；保持 96rpx 高的命中盒、25rpx 文字与 20rpx 圆角。取消最小宽 152rpx，地址动作最小宽 96rpx。地址禁用动作回到浅灰底/次级灰文字；取消继续使用全局原生 disabled 映射。颜色层级不改变确认、loading、禁用或业务资格。
+
 按压使用 120ms `ease-out` 的缩放/透明度反馈，目标缩放 0.97、透明度 0.88；局部 `.hover` 覆盖为 0.85 透明度。没有网页鼠标 hover 设计或自定义 focus ring；输入焦点由原生控件承载。
 
 ### Chips
@@ -241,9 +259,21 @@ components:
 
 搜索与 AI 输入使用圆角灰底；地址表单将标签与原生 input/textarea/picker 排在白色卡片中的分隔行，表单行垂直内边距为 30rpx。昵称编辑保留细描边、小圆角并可换行。输入光标为操作蓝，错误反馈使用独立红色文字；源码没有新增 focus 视觉规则。
 
+AI 输入为原生多行 `textarea`，`auto-height`、最小高 96rpx/最大高 220rpx、28rpx 正文与 1.5 行高，具体内边距见 `composer-input`；最多 1000 字。发送中禁用输入与发送按钮，空草稿禁用发送。输入栏底对齐按钮，保留真实请求状态，不模拟流式文本。
+
 ### Navigation
 
-微信原生顶部导航白底黑字，底部三个入口为商品、订单、我的；常态次级灰，选中操作蓝。原创位图图标随 Tab 状态切换。系统导航尺寸、字体和转场由微信运行时控制，不复制成网页导航。
+微信原生顶部导航白底黑字，底部四个入口依次为商品、订单、客服、我的；客服直接进入现有 AI 对话页，原入口通过 `wx.switchTab` 进入该 Tab。聊天页的“人工与售后”保留人工中心入口。常态次级灰，选中操作蓝；原创位图图标随 Tab 状态切换。客服图标同为脚本绘制的 72px/4px PNG，无第三方素材；来源与摘要见 `.impeccable/review/t014/design-persistence.md`。系统导航尺寸、字体和转场由微信运行时控制，不复制成网页导航。
+
+### Support Spirit & Reply Feedback
+
+“小蓝”以原生 view 几何构成操作蓝身体、白色表情与局部浅灰蓝影，常规画布 180rpx × 188rpx，顶部紧凑变体 80rpx × 84rpx；它是客服局部签名组件，不推广为全局头像或卡片形状。组件 `aria-hidden`，文字状态独立解释正在读取、思考、回复未确认或失败。
+
+可见且未手动关闭动效时，待命低幅浮动为 4.8s `ease-in-out`、最大上移 5rpx；5.6s `linear` 周期内双眨眼，9s `ease-in-out` 周期短挥手。真实 `sending` 切换为 2.4s `ease-in-out` 思考摆动与圆口，pending 三点为 1.4s `ease-in-out`、160ms 依次延迟；实际回复仅以 180ms `ease-out` 的透明度入场。
+
+pending 在实际发送时说明“我想一想”，发送结束但回复尚未确认时提示刷新或重试；失败保留原消息的重试入口，请求错误条另提供刷新。回复只展示实际接口内容，身份及“AI 回复可能有误，请核实”文字持续可见。
+
+离页时 `visible=false`，手动关闭时 `reducedMotion=true`，均停精灵与思考三点；手动关闭也停回复入场并关闭滚动动画。WXSS 的 `prefers-reduced-motion: reduce` 分支停精灵、三点与回复动画，思考身体使用同特异性选择器确保停止 `ponder`；系统分支未自动同步页面布尔值，不能据此保证系统设置下的原生滚动。没有循环 JS 定时器；系统减少动效支持、实际眨眼节律与安卓帧率尚待实机验证。
 
 ### Share Selection & Order Sheet
 

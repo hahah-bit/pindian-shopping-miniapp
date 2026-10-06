@@ -1,4 +1,5 @@
 <view class="page">
+  <view class="list-heading"><text class="list-title">收货地址</text><text class="list-caption">把每一份，送到对的地方。</text></view>
   <view wx:if="{{needLogin}}" class="state">
     <text>请先登录后管理收货地址</text>
     <button bindtap="goLogin" type="button">去登录</button>
@@ -27,9 +28,8 @@
         <view class="detail">{{item.province}}{{item.city}}{{item.district}} {{item.detail}}</view>
       </view>
       <view class="address-actions">
-        <button size="mini" data-id="{{item.id}}" bindtap="onSetDefault" loading="{{busyId === item.id}}" disabled="{{busyId === item.id || item.isDefault}}">{{item.isDefault ? '默认地址' : '设为默认'}}</button>
-        <button size="mini" data-id="{{item.id}}" bindtap="goEdit">编辑</button>
-        <button size="mini" class="danger" data-id="{{item.id}}" bindtap="onDelete" loading="{{busyId === item.id}}" disabled="{{busyId === item.id}}">删除</button>
+        <button size="mini" class="default-action" data-id="{{item.id}}" bindtap="onSetDefault" loading="{{busyId === item.id}}" disabled="{{busyId === item.id || item.isDefault}}">{{item.isDefault ? '默认地址' : '设为默认'}}</button>
+        <view class="edit-actions"><button size="mini" class="edit-action" data-id="{{item.id}}" bindtap="goEdit">编辑</button><button size="mini" class="delete-action" data-id="{{item.id}}" bindtap="onDelete" loading="{{busyId === item.id}}" disabled="{{busyId === item.id}}">删除</button></view>
       </view>
     </view>
     <view class="count-hint">共 {{items.length}}/20 条</view>

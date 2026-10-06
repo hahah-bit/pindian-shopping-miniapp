@@ -1,19 +1,34 @@
-<view class="chat-shell" style="padding-bottom: {{keyboardHeight}}px">
-  <view class="chat-top"><view><text class="chat-title">有问题，聊一聊。</text><text class="chat-caption">AI 智能客服 · 回复可能有误，请核实。订单、退款和发货请联系人工客服。</text></view><button class="human-link" bindtap="human">人工客服</button></view>
-  <scroll-view class="conversation" scroll-y scroll-into-view="{{scrollTarget}}" scroll-with-animation enhanced>
+<view class="chat-shell {{reducedMotion ? 'still' : ''}}" style="padding-bottom: {{keyboardHeight}}px">
+  <view class="chat-top">
+    <support-spirit wx:if="{{messages.length}}" compact active="{{visible}}" thinking="{{sending}}" reduced-motion="{{reducedMotion}}"/>
+    <view class="chat-heading"><text class="chat-title">{{messages.length ? '小蓝 · AI 客服' : '聊聊你的问题。'}}</text><text class="chat-caption">拼单规则、操作指南，都可以问我。</text></view>
+    <button class="human-link" bindtap="human">人工与售后</button>
+  </view>
+  <scroll-view class="conversation" scroll-y scroll-into-view="{{scrollTarget}}" scroll-with-animation="{{!reducedMotion}}" enhanced>
     <view class="chat-content">
-      <view wx:if="{{loading}}" class="state">正在读取对话…</view>
-      <view wx:elif="{{!loggedIn}}" class="welcome"><text class="welcome-title">先登录，再聊聊。</text><text>对话只对你可见。</text><button class="primary-btn" bindtap="login">微信登录</button></view>
+      <view wx:if="{{loading}}" class="loading-state"><view class="skeleton short"></view><view class="skeleton"></view><text>正在读取对话…</text></view>
+      <view wx:elif="{{!loggedIn}}" class="welcome">
+        <support-spirit active="{{visible}}" reduced-motion="{{reducedMotion}}"/>
+        <text class="welcome-title">先登录，再聊聊。</text><text class="welcome-copy">你的问题和对话，只对你可见。</text><button class="primary-btn" bindtap="login">微信登录</button>
+      </view>
       <block wx:else>
         <button wx:if="{{nextBefore}}" class="history-button" bindtap="older" loading="{{olderLoading}}" disabled="{{olderLoading}}">更早的对话</button>
-        <view wx:if="{{!messages.length}}" class="welcome"><text class="welcome-title">你好，我在这里。</text><text>我能解释拼单规则和页面操作。
-订单进度、退款或发货，请联系人工客服。</text>
-          <button data-text="怎么参与拼单？" bindtap="quick">怎么参与拼单？</button><button data-text="怎么添加收货地址？" bindtap="quick">怎么添加收货地址？</button>
+        <view wx:if="{{!messages.length}}" class="welcome">
+          <support-spirit active="{{visible}}" reduced-motion="{{reducedMotion}}"/>
+          <text class="welcome-title">你好，我是小蓝。</text><text class="welcome-copy">想怎么拼、地址怎么填？
+从一个小问题开始吧。</text>
+          <view class="quick-questions">
+            <button data-text="怎么参与拼单？" bindtap="quick">怎么参与拼单</button><button data-text="怎么添加收货地址？" bindtap="quick">添加收货地址</button><button data-text="怎么查看订单？" bindtap="quick">怎么查看订单</button><button data-text="退款找谁处理？" bindtap="quick">退款找谁处理</button>
+          </view>
         </view>
         <view wx:for="{{messages}}" wx:key="clientMessageId" id="turn-{{item.clientMessageId}}" class="turn">
           <view class="user-message"><text selectable>{{item.text}}</text></view>
-          <view class="assistant-label">AI 智能客服</view>
-          <view class="assistant-message"><text wx:if="{{item.reply}}" selectable>{{item.reply}}</text><text wx:elif="{{item.status === 'pending'}}" class="pending-text">{{sending ? '正在想一想…' : '回复待确认，可刷新查看或重试'}}</text><text wx:else class="pending-text">暂时没有收到回复</text></view>
+          <view class="assistant-label">小蓝 · AI</view>
+          <view class="assistant-message">
+            <text wx:if="{{item.reply}}" class="reply-text" selectable>{{item.reply}}</text>
+            <view wx:elif="{{item.status === 'pending'}}" class="pending-text"><view wx:if="{{sending}}" class="thinking-dots {{visible && !reducedMotion ? 'moving' : ''}}"><view></view><view></view><view></view></view><text>{{sending ? '我想一想，稍等一下…' : '回复还未确认，刷新查看或重试。'}}</text></view>
+            <text wx:else class="pending-text">这次没收到回复，你可以再试一次。</text>
+          </view>
           <button wx:if="{{item.status !== 'completed' && !sending}}" class="retry-button" data-id="{{item.clientMessageId}}" bindtap="retryTurn">重试这条消息</button>
         </view>
       </block>
@@ -21,5 +36,6 @@
     </view>
   </scroll-view>
   <view wx:if="{{error}}" class="chat-error"><text>{{error}}</text><button bindtap="refresh" disabled="{{sending}}">刷新</button></view>
-  <view wx:if="{{loggedIn}}" class="composer"><input class="message-input" value="{{draft}}" placeholder="想问点什么？" maxlength="1000" bindinput="input" bindconfirm="send" bindkeyboardheightchange="keyboard" adjust-position="{{false}}" confirm-type="send" disabled="{{sending}}"/><button class="send-button primary-btn" bindtap="send" loading="{{sending}}" disabled="{{sending || !draft}}">发送</button></view>
+  <view class="chat-footnote"><text>AI 回复可能有误，请核实。</text><button class="motion-toggle" bindtap="toggleMotion">{{reducedMotion ? '开启动效' : '关闭动效'}}</button></view>
+  <view wx:if="{{loggedIn && !loading}}" class="composer"><textarea class="message-input" value="{{draft}}" placeholder="想问点什么？" placeholder-class="input-placeholder" auto-height maxlength="1000" bindinput="input" bindconfirm="send" bindkeyboardheightchange="keyboard" adjust-position="{{false}}" confirm-type="send" show-confirm-bar="{{false}}" disabled="{{sending}}"/><button class="send-button primary-btn" bindtap="send" loading="{{sending}}" disabled="{{sending || !draft}}">发送</button></view>
 </view>

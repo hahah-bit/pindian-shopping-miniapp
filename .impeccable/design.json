@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-06T13:45:18.0091289Z",
+  "generatedAt": "2026-10-06T14:21:33Z",
   "title": "Design System: 拼单购物原生小程序",
   "extensions": {
     "colorMeta": {
@@ -54,6 +54,10 @@
       },
       "error": {
         "displayName": "异常红",
+        "role": "semantic"
+      },
+      "danger-soft": {
+        "displayName": "浅红语义底",
         "role": "semantic"
       },
       "warning-text": {
@@ -141,7 +145,42 @@
       {
         "name": "reduced-motion",
         "value": "prefers-reduced-motion: reduce",
-        "purpose": "源码关闭按钮/分类/份额transition和transform、面板/遮罩animation；未保证原生swiper或scroll-with-animation，待验。"
+        "purpose": "源码关闭按钮/分类/份额transition和transform、面板/遮罩及客服精灵/三点/回复animation；媒体分支含同特异性思考身体选择器，覆盖ponder。系统设置未同步页面reducedMotion，未保证原生swiper或scroll-with-animation。手动客服开关与离页控制另见support-motion-gate；系统支持待验。"
+      },
+      {
+        "name": "support-idle-float",
+        "value": "4.8s ease-in-out infinite",
+        "purpose": "小蓝身体及天线，最大上移5rpx；身体旋转-4deg到-2deg，局部签名组件。"
+      },
+      {
+        "name": "support-double-blink",
+        "value": "5.6s linear infinite",
+        "purpose": "周期44%和51%时眼睛scaleY(.12)，其余节点恢复，双眨眼时序尚未实机验证。"
+      },
+      {
+        "name": "support-handwave",
+        "value": "9s ease-in-out infinite",
+        "purpose": "周期3%和6%时手部rotate(-46deg)，常态-28deg。"
+      },
+      {
+        "name": "support-thinking",
+        "value": "2.4s ease-in-out infinite",
+        "purpose": "真实sending时身体-4deg到4deg摆动并呈圆口，覆盖待命身体浮动。"
+      },
+      {
+        "name": "support-pending-dots",
+        "value": "1.4s ease-in-out infinite; delay 0/160/320ms",
+        "purpose": "真实发送中的三点opacity .4到1、translateY(0)到-3rpx；隐藏或手动关闭动效时静止。"
+      },
+      {
+        "name": "support-reply-enter",
+        "value": "180ms ease-out",
+        "purpose": "实际回复opacity .5到1；手动关闭及WXSS减少动效分支停止，不模拟流式内容。"
+      },
+      {
+        "name": "support-motion-gate",
+        "value": "visible && !reducedMotion",
+        "purpose": "控制精灵和思考三点；onHide设visible=false。页面手动开关另停回复入场与scroll-with-animation；CSS系统分支仅停动画，实际Android支持/帧率待验。"
       }
     ],
     "breakpoints": []
@@ -176,8 +215,8 @@
       "kind": "button",
       "refersTo": "button-ghost",
       "description": "AI顶部透明辅助按钮；文字保留人工身份，预览rpx÷2。",
-      "html": "<button class=\"ds-human\">人工客服</button>",
-      "css": ".ds-human{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:transparent;color:#0071e3;font-size:12.5px;line-height:1.5;min-width:68px;min-height:48px;border:0;border-radius:12px;padding:0 8px;transition:transform 120ms ease-out,opacity 120ms ease-out}.ds-human:hover,.ds-human:active{transform:scale(.97);opacity:.88}.ds-human:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-human{transition:none;transform:none!important}}"
+      "html": "<button class=\"ds-human\">人工与售后</button>",
+      "css": ".ds-human{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:transparent;color:#0066cc;font-size:12px;line-height:1.5;min-width:72px;min-height:48px;border:0;border-radius:12px;padding:0 6px;transition:transform 120ms ease-out,opacity 120ms ease-out}.ds-human:hover,.ds-human:active{transform:scale(.97);opacity:.88}.ds-human:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-human{transition:none;transform:none!important}}"
     },
     {
       "name": "搜索输入",
@@ -207,8 +246,8 @@
       "name": "原生Tab配色示意",
       "kind": "nav",
       "refersTo": "tab-navigation",
-      "description": "仅示意原创图标与Tab色彩；宿主微信控制实际Tab尺寸和排版。SVG根据原创72px脚本路径转译。",
-      "html": "<nav class=\"ds-tabs\" aria-label=\"底部导航\"><button class=\"ds-tab ds-tab-selected\" aria-current=\"page\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><path d=\"M14 26 36 14 58 26 36 38 14 26V51L36 63 58 51V26M36 38V63M25 20 47 32\"/></svg>商品</button><button class=\"ds-tab\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><path d=\"M19 13H53V60H19ZM27 26H45M27 36H45M27 46H38\"/></svg>订单</button><button class=\"ds-tab\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><circle cx=\"36\" cy=\"22\" r=\"11\"/><path d=\"M15 58.5a21 19.5 0 0 1 42 0M15 58H57\"/></svg>我的</button></nav>",
+      "description": "仅示意四项原生Tab及配色；客服实际switchTab直达AI对话，宿主微信控制Tab尺寸、安全区和排版。SVG根据原创72px脚本几何转译，预览无路由。",
+      "html": "<nav class=\"ds-tabs\" aria-label=\"底部导航\"><button class=\"ds-tab ds-tab-selected\" aria-current=\"page\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><path d=\"M14 26 36 14 58 26 36 38 14 26V51L36 63 58 51V26M36 38V63M25 20 47 32\"/></svg>商品</button><button class=\"ds-tab\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><path d=\"M19 13H53V60H19ZM27 26H45M27 36H45M27 46H38\"/></svg>订单</button><button class=\"ds-tab\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><path d=\"M12 34a24 20 0 0 1 48 0M12 34V46M60 34V46M60 47a24 9 0 0 1-39.43 6.9M12 46 18 52V62L30 55\"/><circle cx=\"26\" cy=\"32\" r=\"1\"/><circle cx=\"45\" cy=\"32\" r=\"1\"/></svg>客服</button><button class=\"ds-tab\"><svg viewBox=\"0 0 72 72\" aria-hidden=\"true\"><circle cx=\"36\" cy=\"22\" r=\"11\"/><path d=\"M15 58.5a21 19.5 0 0 1 42 0M15 58H57\"/></svg>我的</button></nav>",
       "css": ".ds-tabs{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;display:flex;background:#fff}.ds-tab{flex:1;display:flex;flex-direction:column;align-items:center;background:transparent;border:0;color:#6e6e73;font:inherit;padding:8px}.ds-tab-selected{color:#0071e3}.ds-tab svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:4;stroke-linecap:round}.ds-tab:focus-visible{outline:revert;}"
     },
     {
@@ -224,7 +263,46 @@
       "kind": "custom",
       "description": "聊天用户消息的浏览器预览；不模拟助手身份或网络模型调用。",
       "html": "<div class=\"ds-user-message\">怎么参与拼单？</div>",
-      "css": ".ds-user-message{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;margin-left:30px;background:#0071e3;color:#fff;border-radius:13px 13px 3px 13px;padding:12px 14px;white-space:pre-wrap;font-size:14px;line-height:1.65}"
+      "css": ".ds-user-message{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;width:fit-content;max-width:85%;box-sizing:border-box;margin-left:auto;background:#0071e3;color:#fff;border-radius:13px 13px 3px 13px;padding:10px 13px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.65}"
+    },
+    {
+      "name": "中性次级动作",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "地址设为默认的375px转译；订单取消使用同配色、最小宽76px，原生禁用按全局映射。预览无业务绑定，hover/active仅模拟原生按压。",
+      "html": "<button class=\"ds-secondary\">设为默认</button>",
+      "css": ".ds-secondary{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:#f5f5f7;color:#515154;font-size:12.5px;line-height:1.4;min-width:48px;min-height:48px;padding:0 10px;border:0;border-radius:10px;transition:transform 120ms ease-out,opacity 120ms ease-out}.ds-secondary:hover,.ds-secondary:active{transform:scale(.97);opacity:.88}.ds-secondary:disabled{background:#f5f5f7;color:#6e6e73;transform:none;opacity:1}.ds-secondary:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-secondary{transition:none;transform:none!important}}"
+    },
+    {
+      "name": "文字编辑动作",
+      "kind": "button",
+      "refersTo": "button-edit",
+      "description": "地址编辑的375px转译，浅层文字动作保留48px命中盒。无业务绑定，焦点为浏览器默认。",
+      "html": "<button class=\"ds-edit\">编辑</button>",
+      "css": ".ds-edit{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:transparent;color:#515154;font-size:12.5px;line-height:1.4;min-width:48px;min-height:48px;padding:0 10px;border:0;border-radius:10px;transition:transform 120ms ease-out,opacity 120ms ease-out}.ds-edit:hover,.ds-edit:active{transform:scale(.97);opacity:.88}.ds-edit:disabled{background:#f5f5f7;color:#6e6e73;transform:none;opacity:1}.ds-edit:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-edit{transition:none;transform:none!important}}"
+    },
+    {
+      "name": "浅红删除动作",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "地址删除的375px转译，浅红仅表危险语义；真实确认和权限仍由原用例处理，预览无删除动作。",
+      "html": "<button class=\"ds-danger\">删除</button>",
+      "css": ".ds-danger{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;background:#fff1f0;color:#b42318;font-size:12.5px;line-height:1.4;min-width:48px;min-height:48px;padding:0 10px;border:0;border-radius:10px;transition:transform 120ms ease-out,opacity 120ms ease-out}.ds-danger:hover,.ds-danger:active{transform:scale(.97);opacity:.88}.ds-danger:disabled{background:#f5f5f7;color:#6e6e73;transform:none;opacity:1}.ds-danger:focus-visible{outline:revert;}@media(prefers-reduced-motion:reduce){.ds-danger{transition:none;transform:none!important}}"
+    },
+    {
+      "name": "AI多行输入",
+      "kind": "input",
+      "refersTo": "composer-input",
+      "description": "原生auto-height textarea的375px静态转译，48至110px高、最多1000字。浏览器预览不实现原生自动高度、键盘事件或Tab安全区；发送中原生禁用。",
+      "html": "<textarea class=\"ds-composer\" rows=\"1\" maxlength=\"1000\" aria-label=\"客服问题\" placeholder=\"想问点什么？\"></textarea>",
+      "css": ".ds-composer{font-family:-apple-system,BlinkMacSystemFont,\"Helvetica Neue\",sans-serif;min-height:48px;max-height:110px;width:100%;box-sizing:border-box;min-width:0;background:#f5f5f7;color:#1d1d1f;border:0;border-radius:12px;padding:13px 12px;font-size:14px;line-height:1.5;caret-color:#0071e3}.ds-composer::placeholder{color:#6e6e73}.ds-composer:focus-visible{outline:revert;}"
+    },
+    {
+      "name": "小蓝客服精灵",
+      "kind": "custom",
+      "description": "原生view原创几何的375px待命预览，90×94px，紧凑变体40×42px。实际thinking由sending控制，hidden或手动reducedMotion静止；预览没有请求、页面生命周期或系统动效验证能力。影色只属本组件。",
+      "html": "<div class=\"ds-spirit\" aria-hidden=\"true\"><div class=\"ds-antenna\"><div class=\"ds-tip\"></div></div><div class=\"ds-spirit-body\"><div class=\"ds-eye ds-eye-left\"></div><div class=\"ds-eye ds-eye-right\"></div><div class=\"ds-smile\"></div><div class=\"ds-hand\"></div></div><div class=\"ds-shadow\"></div></div>",
+      "css": ".ds-spirit{position:relative;width:90px;height:94px;margin:0 auto}.ds-spirit-body{position:absolute;top:16px;left:10.5px;width:69px;height:63px;background:#0071e3;border-radius:24px 24px 21px 21px;transform:rotate(-4deg);animation:ds-float 4.8s ease-in-out infinite}.ds-eye{position:absolute;top:21.5px;width:6px;height:10.5px;background:#fff;border-radius:5px;transform-origin:center;animation:ds-blink 5.6s linear infinite}.ds-eye-left{left:22px}.ds-eye-right{right:19px}.ds-smile{position:absolute;left:30.5px;top:39px;width:9px;height:4.5px;border-bottom:1.5px solid #fff;border-radius:0 0 8px 8px}.ds-hand{position:absolute;right:-5.5px;top:37px;width:10px;height:17.5px;background:#0071e3;border-radius:8px;transform:rotate(-28deg);animation:ds-wave 9s ease-in-out infinite}.ds-antenna{position:absolute;left:46.5px;top:6.5px;width:2px;height:13px;background:#0071e3;transform:rotate(12deg);animation:ds-float 4.8s ease-in-out infinite}.ds-tip{position:absolute;left:-2.5px;top:-1.5px;width:7px;height:7px;border-radius:50%;background:#0071e3}.ds-shadow{position:absolute;left:26px;bottom:5.5px;width:38px;height:4px;background:#dfe8f1;border-radius:50%}@keyframes ds-float{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-2.5px) rotate(-2deg)}}@keyframes ds-blink{0%,42%,46%,49%,53%,100%{transform:scaleY(1)}44%,51%{transform:scaleY(.12)}}@keyframes ds-wave{0%,8%,100%{transform:rotate(-28deg)}3%,6%{transform:rotate(-46deg)}}@media(prefers-reduced-motion:reduce){.ds-spirit-body,.ds-antenna,.ds-eye,.ds-hand{animation:none}}"
     }
   ],
   "narrative": {

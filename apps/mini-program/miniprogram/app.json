@@ -37,6 +37,12 @@
         "selectedIconPath": "assets/tabs/orders-active.png"
       },
       {
+        "pagePath": "features/ai-support/pages/chat/index",
+        "text": "客服",
+        "iconPath": "assets/tabs/support-normal.png",
+        "selectedIconPath": "assets/tabs/support-active.png"
+      },
+      {
         "pagePath": "features/profile/pages/index/index",
         "text": "我的",
         "iconPath": "assets/tabs/profile-normal.png",

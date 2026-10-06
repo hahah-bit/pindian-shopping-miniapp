@@ -85,7 +85,7 @@ Page({
       orderNo: order.orderNo,
       status: order.status,
       statusText: STATUS_TEXT[order.status],
-      unitsLabel: order.units + '/60 单位',
+      unitsLabel: ({30:'1/2 份',20:'1/3 份',15:'1/4 份',12:'1/5 份'} as Record<number,string>)[order.units]??order.units+'/60 份',
       amountText: formatFen(order.quote.totalAmountFen),
       createdAtText: new Date(order.createdAt).toLocaleString(),
       canCancel: order.status === 'unpaid'

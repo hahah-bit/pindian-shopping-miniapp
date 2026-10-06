@@ -1,4 +1,5 @@
 <view class="page">
+  <view class="list-heading"><text class="list-title">我的订单</text><text class="list-caption">每一份拼单，都在这里。</text></view>
   <view class="notice">微信支付暂未开放，开放后可在订单中支付</view>
 
   <view wx:if="{{needLogin}}" class="state">
@@ -30,7 +31,7 @@
       </view>
       <view class="row3">
         <text class="time">{{item.createdAtText}}</text>
-        <button wx:if="{{item.canCancel}}" size="mini" class="danger" data-id="{{item.id}}" catchtap="onCancel" loading="{{busyId === item.id}}" disabled="{{busyId === item.id}}">取消订单</button>
+        <button wx:if="{{item.canCancel}}" size="mini" class="cancel-button" data-id="{{item.id}}" catchtap="onCancel" loading="{{busyId === item.id}}" disabled="{{busyId === item.id}}">取消订单</button>
       </view>
     </view>
     <view wx:if="{{!hasMore}}" class="load-more">没有更多了</view>
