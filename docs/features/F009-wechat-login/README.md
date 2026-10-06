@@ -8,7 +8,7 @@
 - 修改目录：`backend/src/contexts/identity-access`（user 部分）、`backend/src/adapters/outbound/wechat`（新）、`backend/migrations/0006*、0007*`、`contracts`、`apps/mini-program/miniprogram/platform`、`features/profile`、`tests/task-suites/t003`。
 - 前置功能：[F005](../F005-admin-auth/README.md)（会话模式与守卫机制）。
 - 当前状态：已完成（TDD+集成；真实微信登录未验证，见 verification.md）。
-- 阻塞项：真实微信凭据缺失（见 T003 README），不阻塞代码与本地验证。
+- 阻塞项：2026-10-06 已取得本机测试号凭据并通过官方凭据预检查；有效用户登录流程和安卓真机仍待验证，见最新 verification，不代表渠道整体验收完成。
 
 文档：[DDD](ddd.md)、[spec](spec.md)、[plan](plan.md)、[验收](verification.md)。
 
