@@ -1,3 +1,4 @@
+import { normalizeCategory } from '../contexts/catalog/domain/product';
 import { ApplicationError } from '../shared/kernel';
 import { formatMilli, referenceSharePriceFen, shareLabel, shareQuantityMilli, type Product, type ShareUnits } from '../contexts/catalog/domain';
 import type { MediaUrlBuilder, ProductRepository, ListAdminQuery } from '../contexts/catalog/application/ports';
@@ -41,6 +42,7 @@ export class AdminCatalogQueries {
       return {
         id: product.state.productId,
         name: product.state.name,
+        category: product.state.category ?? 'other',
         originalPriceFen: product.state.originalPriceFen,
         wholeQuantity: product.state.wholeQuantityText,
         unit: product.state.unit,
@@ -63,6 +65,7 @@ export class AdminCatalogQueries {
     return {
       id: product.state.productId,
       name: product.state.name,
+        category: product.state.category ?? 'other',
       description: product.state.description,
       originalPriceFen: product.state.originalPriceFen,
       userWholePriceFen: product.state.originalPriceFen + 500,
@@ -92,16 +95,20 @@ export class MiniCatalogQueries {
     return stock?.state.availableWholeItems ?? 0;
   }
 
-  async list(rawQuery: { page?: unknown; pageSize?: unknown }) {
+  async list(rawQuery: { page?: unknown; pageSize?: unknown; keyword?: unknown; category?: unknown }) {
     const page = normalizePage(rawQuery.page);
     const pageSize = normalizePageSize(rawQuery.pageSize);
-    const { items, total } = await this.deps.products.listOnShelf({ page, pageSize });
+    if (rawQuery.keyword !== undefined && (typeof rawQuery.keyword !== 'string' || rawQuery.keyword.trim().length > 60)) throw new ApplicationError('VALIDATION_FAILED', '搜索词最多60个字符');
+    const keyword = typeof rawQuery.keyword === 'string' ? rawQuery.keyword.trim() || undefined : undefined;
+    const category = rawQuery.category === undefined || rawQuery.category === '' ? undefined : normalizeCategory(rawQuery.category);
+    const { items, total } = await this.deps.products.listOnShelf({ page, pageSize, keyword, category });
     const rows = await Promise.all(items.map(async (product) => {
       const available = await this.stockAvailable(product.state.productId);
       const options = shareOptionsOf(product);
       return {
         id: product.state.productId,
         name: product.state.name,
+        category: product.state.category ?? 'other',
         mainImageUrl: product.mainImage ? this.deps.urlBuilder.build(product.mainImage.mediaId) : undefined,
         originalPriceFen: product.state.originalPriceFen,
         userWholePriceFen: product.state.originalPriceFen + 500,
@@ -121,6 +128,7 @@ export class MiniCatalogQueries {
     return {
       id: product.state.productId,
       name: product.state.name,
+        category: product.state.category ?? 'other',
       description: product.state.description,
       mainImageUrl: product.mainImage ? this.deps.urlBuilder.build(product.mainImage.mediaId) : undefined,
       detailImageUrls: product.detailImages.map((image) => this.deps.urlBuilder.build(image.mediaId)),

@@ -55,6 +55,7 @@ export class UpdateProduct {
     const updated = existing.update(
       {
         name: validatedMedia.state.name,
+        category: input.input.category === undefined ? existing.state.category : validatedMedia.state.category,
         description: validatedMedia.state.description,
         originalPriceFen: validatedMedia.state.originalPriceFen,
         wholeQuantity: validatedMedia.state.wholeQuantityText,

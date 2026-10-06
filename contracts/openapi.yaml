@@ -349,6 +349,8 @@ paths:
       parameters:
         - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
         - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+        - { name: keyword, in: query, schema: { type: string, maxLength: 60 }, description: 字面量名称关键字，trim后匹配 }
+        - { name: category, in: query, schema: { type: string, enum: [fruit, snack, drink, other] }, description: 与关键字同时筛选后分页 }
       responses:
         '200':
           description: 上架商品分页

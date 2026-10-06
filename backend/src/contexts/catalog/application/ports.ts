@@ -42,6 +42,6 @@ export interface ProductRepository {
   save(product: Product, session?: unknown): Promise<void>;
   findById(productId: string): Promise<Product | null>;
   listAdmin(query: ListAdminQuery): Promise<PageResult<Product>>;
-  listOnShelf(query: { page: number; pageSize: number }): Promise<PageResult<Product>>;
+  listOnShelf(query: { page: number; pageSize: number; keyword?: string; category?: string }): Promise<PageResult<Product>>;
   findByIdIfOnShelf(productId: string): Promise<Product | null>;
 }

@@ -31,6 +31,7 @@ interface ImageChoice {
 
 const form = reactive({
   name: '',
+  category: 'other' as import('@pindian/contracts').ProductCategory,
   description: '',
   originalPriceYuan: '',
   wholeQuantity: '',
@@ -88,6 +89,7 @@ async function loadProduct() {
   try {
     const view = await getAdminProduct(props.productId);
     form.name = view.name;
+    form.category = view.category ?? 'other';
     form.description = view.description;
     form.originalPriceYuan = (view.originalPriceFen / 100).toFixed(2);
     form.wholeQuantity = view.wholeQuantity;
@@ -161,6 +163,7 @@ async function submit() {
   notice.value = '';
   const base = {
     name: form.name.trim(),
+    category: form.category,
     description: form.description,
     originalPriceFen: originalPriceFen.value,
     wholeQuantity: form.wholeQuantity,
@@ -256,6 +259,8 @@ onMounted(loadProduct);
       <h3>基础信息</h3>
       <label for="product-name">商品名称 *</label>
       <input id="product-name" v-model="form.name" maxlength="60" placeholder="如：红富士苹果" />
+      <label for="product-category">商品分类</label>
+      <select id="product-category" v-model="form.category"><option value="fruit">水果</option><option value="snack">零食</option><option value="drink">饮品</option><option value="other">其他</option></select>
       <label for="product-desc">商品介绍</label>
       <textarea id="product-desc" v-model="form.description" rows="4" maxlength="2000" placeholder="产地、规格、发货说明等" />
       <div class="field-row">

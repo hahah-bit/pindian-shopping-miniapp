@@ -5,6 +5,7 @@ import { isPoolClient, withExecutor, type PgExecutor } from '../../../../../adap
 interface ProductRow {
   id: string;
   name: string;
+  category: ProductState['category'];
   description: string;
   original_price_fen: number;
   whole_quantity: string;
@@ -39,6 +40,7 @@ function toDomain(row: ProductRow, images: ImageRow[]): Product {
   return Product.rehydrate({
     productId: row.id,
     name: row.name,
+    category: row.category,
     description: row.description,
     originalPriceFen: row.original_price_fen,
     wholeQuantityText: normalizeQuantityText(row.whole_quantity),
@@ -62,10 +64,11 @@ export class PostgresProductRepository implements ProductRepository {
       if (own) await client.query('BEGIN');
       try {
         await client.query(
-          `INSERT INTO products (id, name, description, original_price_fen, whole_quantity, unit, allowed_share_units, status, created_at, updated_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+          `INSERT INTO products (id, name, description, original_price_fen, whole_quantity, unit, allowed_share_units, status, created_at, updated_at, category)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
            ON CONFLICT (id) DO UPDATE SET
              name = EXCLUDED.name,
+             category = EXCLUDED.category,
              description = EXCLUDED.description,
              original_price_fen = EXCLUDED.original_price_fen,
              whole_quantity = EXCLUDED.whole_quantity,
@@ -73,7 +76,7 @@ export class PostgresProductRepository implements ProductRepository {
              allowed_share_units = EXCLUDED.allowed_share_units,
              status = EXCLUDED.status,
              updated_at = EXCLUDED.updated_at`,
-          [state.productId, state.name, state.description, state.originalPriceFen, state.wholeQuantityText, state.unit, state.allowedShareUnits, state.status, state.createdAt, state.updatedAt]
+          [state.productId, state.name, state.description, state.originalPriceFen, state.wholeQuantityText, state.unit, state.allowedShareUnits, state.status, state.createdAt, state.updatedAt, state.category ?? 'other']
         );
         await client.query('DELETE FROM product_images WHERE product_id = $1', [state.productId]);
         for (const image of state.images) {
@@ -139,18 +142,25 @@ export class PostgresProductRepository implements ProductRepository {
     });
   }
 
-  async listOnShelf(query: { page: number; pageSize: number }): Promise<PageResult<Product>> {
+  async listOnShelf(query: { page: number; pageSize: number; keyword?: string; category?: string }): Promise<PageResult<Product>> {
     return withExecutor(this.pool, async (client) => {
-      const { rows: countRows } = await client.query<{ total: string }>(`SELECT COUNT(*)::int4 AS total FROM products WHERE status = 'on_shelf'`);
+      const params: unknown[] = [];
+      const conditions = ["p.status = 'on_shelf'"];
+      if (query.keyword) {
+        params.push(query.keyword);
+        conditions.push(`strpos(lower(p.name), lower($${params.length}::text)) > 0`);
+      }
+      if (query.category) { params.push(query.category); conditions.push(`p.category = $${params.length}`); }
+      const where = `WHERE ${conditions.join(' AND ')}`;
+      const { rows: countRows } = await client.query<{ total: string }>(`SELECT COUNT(*)::int4 AS total FROM products p ${where}`, params);
       const { rows } = await client.query<ProductRow & { images: ImageRow[] }>(
         `SELECT p.*, COALESCE((
            SELECT json_agg(json_build_object('media_asset_id', pi.media_asset_id, 'role', pi.role, 'sort_order', pi.sort_order) ORDER BY pi.sort_order)
            FROM product_images pi WHERE pi.product_id = p.id), '[]'::json) AS images
-         FROM products p WHERE p.status = 'on_shelf' ORDER BY p.created_at DESC, p.id DESC LIMIT $1 OFFSET $2`,
-        [query.pageSize, (query.page - 1) * query.pageSize]
+         FROM products p ${where} ORDER BY p.created_at DESC, p.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, query.pageSize, (query.page - 1) * query.pageSize]
       );
       return { items: rows.map((row) => toDomain(row, row.images as ImageRow[])), total: Number(countRows[0]?.total ?? 0) };
     });
   }
 }
-

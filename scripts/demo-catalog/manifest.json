@@ -1,0 +1,478 @@
+{
+  "version": 1,
+  "checkedAt": "2026-10-06",
+  "notice": "本地展示商品，照片为网络素材，价格与库存是自用测试数据；无产地、认证或销量承诺。",
+  "products": [
+    {
+      "key": "apples",
+      "name": "[体验] 苹果",
+      "category": "fruit",
+      "originalPriceFen": 3980,
+      "wholeQuantity": "10",
+      "unit": "斤",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "苹果拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/qGp8bLSTRAc",
+          "url": "https://images.unsplash.com/photo-1667443689820-913778704744",
+          "license": "https://unsplash.com/license",
+          "file": "assets/apples-1.jpg",
+          "sha256": "bc8f2cc6be1f2505d82058352e52cbfa237de8901912c9987c68fa3bb835578b",
+          "downloadUrl": "https://images.unsplash.com/photo-1667443689820-913778704744?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 162245
+        },
+        {
+          "source": "https://unsplash.com/photos/NBG5tyhlZ2k",
+          "url": "https://images.unsplash.com/photo-1634228372613-afe0ba3b9b74",
+          "license": "https://unsplash.com/license",
+          "file": "assets/apples-2.jpg",
+          "sha256": "20d236d6ccc35355c3767cb74b6558099aec42c5eeed802c86035dba0963568c",
+          "downloadUrl": "https://images.unsplash.com/photo-1634228372613-afe0ba3b9b74?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 247543
+        },
+        {
+          "source": "https://unsplash.com/photos/FcDDFUuXh-c",
+          "url": "https://images.unsplash.com/photo-1549301014-95d119f5c960",
+          "license": "https://unsplash.com/license",
+          "file": "assets/apples-3.jpg",
+          "sha256": "622c5cb6c3000d0eed11b94a37e0d65504f6bf2573af08fe406fbc51b30bd92e",
+          "downloadUrl": "https://images.unsplash.com/photo-1549301014-95d119f5c960?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 137827
+        }
+      ]
+    },
+    {
+      "key": "oranges",
+      "name": "[体验] 橙子",
+      "category": "fruit",
+      "originalPriceFen": 4280,
+      "wholeQuantity": "10",
+      "unit": "斤",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "橙子拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/A4BBdJQu2co",
+          "url": "https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b",
+          "license": "https://unsplash.com/license",
+          "file": "assets/oranges-1.jpg",
+          "sha256": "db9393ef2250c0d8b23085eff0d6579626730ae93b0669cc8f009a6cf5ed0a43",
+          "downloadUrl": "https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 260845
+        },
+        {
+          "source": "https://unsplash.com/photos/vvkVM0m0SRU",
+          "url": "https://images.unsplash.com/photo-1702040242527-1be3acf5a0b3",
+          "license": "https://unsplash.com/license",
+          "file": "assets/oranges-2.jpg",
+          "sha256": "879db7e3631532e4da72dfefd888c39ad5e1f9065682d0f3d77795472ab8e771",
+          "downloadUrl": "https://images.unsplash.com/photo-1702040242527-1be3acf5a0b3?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 256398
+        },
+        {
+          "source": "https://unsplash.com/photos/1Pqa9bqSBks",
+          "url": "https://images.unsplash.com/photo-1591436907060-6e1e1501cfad",
+          "license": "https://unsplash.com/license",
+          "file": "assets/oranges-3.jpg",
+          "sha256": "83d98e5619145168b6048b5c05054e11704a6d88d418468637ff277ba5fd1c62",
+          "downloadUrl": "https://images.unsplash.com/photo-1591436907060-6e1e1501cfad?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 322364
+        }
+      ]
+    },
+    {
+      "key": "strawberries",
+      "name": "[体验] 草莓",
+      "category": "fruit",
+      "originalPriceFen": 5980,
+      "wholeQuantity": "5",
+      "unit": "斤",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "草莓拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/red-strawberries-9AOJ4Qp7Txo",
+          "url": "https://images.unsplash.com/photo-1574012755818-d04012d79095",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/strawberries-1.jpg",
+          "sha256": "ba4e04ab2e8d883ae52370a1c8e9afb8f7b85857fb54ed9d0e1f0d70c2c50f63",
+          "downloadUrl": "https://images.unsplash.com/photo-1574012755818-d04012d79095?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 482714
+        },
+        {
+          "source": "https://unsplash.com/photos/a-close-up-of-a-bunch-of-strawberries-i30zNEOXQ9s",
+          "url": "https://images.unsplash.com/photo-1644789752457-76b92c5a8ae1",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/strawberries-2.jpg",
+          "sha256": "4c1ccfa2603d2da8d8e3960720a297fec5e90e2731bc5a4e949128ae3a689613",
+          "downloadUrl": "https://images.unsplash.com/photo-1644789752457-76b92c5a8ae1?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 175519
+        },
+        {
+          "source": "https://unsplash.com/photos/a-pile-of-strawberries-w4viRJxQi6k",
+          "url": "https://images.unsplash.com/photo-1661193302695-a3456348cdad",
+          "license": "https://unsplash.com/license",
+          "file": "assets/strawberries-3.jpg",
+          "sha256": "3b036d5c5cd6964421fc610340d3f7d78311660f78460fe13c58bc9943c057e3",
+          "downloadUrl": "https://images.unsplash.com/photo-1661193302695-a3456348cdad?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 430372
+        }
+      ]
+    },
+    {
+      "key": "blueberries",
+      "name": "[体验] 蓝莓",
+      "category": "fruit",
+      "originalPriceFen": 7980,
+      "wholeQuantity": "3",
+      "unit": "斤",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "蓝莓拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/a-pile-of-blueberries-is-shown-close-up-E26EpdC5gco",
+          "url": "https://images.unsplash.com/photo-1688969742735-c76b8351824a",
+          "title": "A pile of blueberries is shown close up photo – Free Grey Image on Unsplash (https://unsplash.com/photos/a-pile-of-blueberries-is-shown-close-up-E26EpdC5gco)",
+          "license": "https://unsplash.com/license",
+          "file": "assets/blueberries-1.jpg",
+          "sha256": "ebda484fbe19a991726c66db9cc4c8a78b3605dbd7baf4fc192ab9995d40467d",
+          "downloadUrl": "https://images.unsplash.com/photo-1688969742735-c76b8351824a?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 287348
+        },
+        {
+          "source": "https://unsplash.com/photos/a-pile-of-blueberries-JmQ1DqJ3fNI",
+          "url": "https://images.unsplash.com/photo-1661427123793-5663e21ca934",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/blueberries-2.jpg",
+          "sha256": "27cf83507db9213b18b31121ee719a421369cfe03342307b5561ec7fe8d1a0fa",
+          "downloadUrl": "https://images.unsplash.com/photo-1661427123793-5663e21ca934?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 177256
+        },
+        {
+          "source": "https://unsplash.com/photos/fresh-blueberries-with-water-droplets-TdDtTu2rv4s",
+          "url": "https://images.unsplash.com/photo-1597774681009-f8679cf72348",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/blueberries-3.jpg",
+          "sha256": "f7d013c765fc7b630ee9f11cd69ae9ccd2e86db3f9b3a6020cd5f5e1d49f4181",
+          "downloadUrl": "https://images.unsplash.com/photo-1597774681009-f8679cf72348?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 294464
+        }
+      ]
+    },
+    {
+      "key": "grapes",
+      "name": "[体验] 青葡萄",
+      "category": "fruit",
+      "originalPriceFen": 6980,
+      "wholeQuantity": "8",
+      "unit": "斤",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "青葡萄拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/green-grapes-on-brown-tree-branch-during-daytime-W5IS-tuYhd8",
+          "url": "https://images.unsplash.com/photo-1599817241242-430a3156b6b6",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/grapes-1.jpg",
+          "sha256": "2604e79702c6b6a816cb9764ffd454036365493b163c7a5fffa94e677e14bf06",
+          "downloadUrl": "https://images.unsplash.com/photo-1599817241242-430a3156b6b6?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 144059
+        },
+        {
+          "source": "https://unsplash.com/photos/a-bunch-of-green-grapes-on-a-tree-qSKS6bcQkgQ",
+          "url": "https://images.unsplash.com/photo-1669999208877-d84160e82bc1",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/grapes-2.jpg",
+          "sha256": "1f5f169f1e63e1d6c0c2901a96e42639bd7665b9654c270c8eb93ad9eb01cb95",
+          "downloadUrl": "https://images.unsplash.com/photo-1669999208877-d84160e82bc1?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 116975
+        },
+        {
+          "source": "https://unsplash.com/photos/green-grapes-in-close-up-photography-bEsOGFwcru8",
+          "url": "https://images.unsplash.com/photo-1600766694283-1342b147738d",
+          "license": "https://unsplash.com/license",
+          "file": "assets/grapes-3.jpg",
+          "sha256": "06ef8f0dc507772c24ac100578c13973e2357abfcc50906294e16ef17a7182f9",
+          "downloadUrl": "https://images.unsplash.com/photo-1600766694283-1342b147738d?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 242195
+        }
+      ]
+    },
+    {
+      "key": "avocado",
+      "name": "[体验] 牛油果",
+      "category": "fruit",
+      "originalPriceFen": 8800,
+      "wholeQuantity": "20",
+      "unit": "个",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "牛油果拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/two-avocados-in-a-holder-on-a-wooden-surface-Fvaawmw7ihU",
+          "url": "https://images.unsplash.com/photo-1704960961229-7698b4ded921",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/avocado-1.jpg",
+          "sha256": "548e579a67333b56c97a6ace9d31557ab3911a9e3a16d4003ec78a94b12f58d7",
+          "downloadUrl": "https://images.unsplash.com/photo-1704960961229-7698b4ded921?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 59618
+        },
+        {
+          "source": "https://unsplash.com/photos/close-up-photo-of-green-fruits-R_buhpl8wSo",
+          "url": "https://images.unsplash.com/photo-1596119415004-be78a87f8d14",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/avocado-2.jpg",
+          "sha256": "6b94409c5bd3686a797c84c808b97075df3b1df4fb69cbac58f488825c05ea68",
+          "downloadUrl": "https://images.unsplash.com/photo-1596119415004-be78a87f8d14?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 348359
+        },
+        {
+          "source": "https://unsplash.com/photos/sliced-green-avocado-fruit-9aOswReDKPo",
+          "url": "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/avocado-3.jpg",
+          "sha256": "6c37f6ebe4e5451d8230d03359f0336e72ca91ce25192f009dee87f7decd9aba",
+          "downloadUrl": "https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 58813
+        }
+      ]
+    },
+    {
+      "key": "lemons",
+      "name": "[体验] 柠檬",
+      "category": "fruit",
+      "originalPriceFen": 3280,
+      "wholeQuantity": "10",
+      "unit": "斤",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "柠檬拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/3-lemon-fruits-on-brown-wooden-table-cVawUXZj_9s",
+          "url": "https://images.unsplash.com/photo-1624989756178-4a906c924420",
+          "license": "https://unsplash.com/license",
+          "file": "assets/lemons-1.jpg",
+          "sha256": "a2d2d4b7fa7e72d04007bac2d2bccb26443815149e18ef0d0bf8e4e756f6fc98",
+          "downloadUrl": "https://images.unsplash.com/photo-1624989756178-4a906c924420?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 209143
+        },
+        {
+          "source": "https://unsplash.com/photos/a-pile-of-lemons-sitting-next-to-each-other-qnYWItyRWrw",
+          "url": "https://images.unsplash.com/photo-1746449695233-3322395a520d",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/lemons-2.jpg",
+          "sha256": "4c0b6e97bc563e8e0a3afb837a47416d7834e0209b732592a8fa59736a307f3f",
+          "downloadUrl": "https://images.unsplash.com/photo-1746449695233-3322395a520d?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 162178
+        },
+        {
+          "source": "https://unsplash.com/fr/photos/agrumes-jaunes-sur-surface-noire-TFqjlTmkeyY",
+          "url": "https://images.unsplash.com/photo-1590502593747-42a996133562",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/lemons-3.jpg",
+          "sha256": "ea173db2dd99ef437f1e0844f124148e161782bce120975996f8c827d9c971b7",
+          "downloadUrl": "https://images.unsplash.com/photo-1590502593747-42a996133562?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 240341
+        }
+      ]
+    },
+    {
+      "key": "almonds",
+      "name": "[体验] 杏仁",
+      "category": "snack",
+      "originalPriceFen": 6800,
+      "wholeQuantity": "2",
+      "unit": "斤",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "杏仁拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/a-pile-of-almonds-sitting-on-top-of-each-other-kAWWYOq1cIs",
+          "url": "https://images.unsplash.com/photo-1631815333332-e3ffb24e2bf8",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/almonds-1.jpg",
+          "sha256": "cbcbdd6cd7c244e8430668f13cae0b5be955b20c733604a043603e637427ff5f",
+          "downloadUrl": "https://images.unsplash.com/photo-1631815333332-e3ffb24e2bf8?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 262017
+        },
+        {
+          "source": "https://unsplash.com/photos/brown-almond-nut-in-close-up-photography-l22yaxk_iuY",
+          "url": "https://images.unsplash.com/photo-1617491830010-f8cfdfd16f1c",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/almonds-2.jpg",
+          "sha256": "370eba8f394b1dc89baa4eb7e7934f8bcafe119ce75275efdea6823ff956b8a3",
+          "downloadUrl": "https://images.unsplash.com/photo-1617491830010-f8cfdfd16f1c?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 146354
+        },
+        {
+          "source": "https://unsplash.com/photos/a-pile-of-almonds-sitting-on-top-of-each-other-jRAGbDerGd8",
+          "url": "https://images.unsplash.com/photo-1642443593360-819168ddf4dd",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/almonds-3.jpg",
+          "sha256": "23551177b8a0bdf0a8ec2c011c64be640dc28c604a77ecc41e21a5171ed1811a",
+          "downloadUrl": "https://images.unsplash.com/photo-1642443593360-819168ddf4dd?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 228058
+        }
+      ]
+    },
+    {
+      "key": "cookies",
+      "name": "[体验] 曲奇饼干",
+      "category": "snack",
+      "originalPriceFen": 4800,
+      "wholeQuantity": "2",
+      "unit": "斤",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "曲奇饼干拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/brown-cookies-on-white-plate-WWJtMDvsDm0",
+          "url": "https://images.unsplash.com/photo-1582385760710-4300982782c1",
+          "title": "Brown cookies on white plate photo – Free Food Image on Unsplash (https://unsplash.com/photos/brown-cookies-on-white-plate-WWJtMDvsDm0)",
+          "license": "https://unsplash.com/license",
+          "file": "assets/cookies-1.jpg",
+          "sha256": "02c0285459b469daf05b113e14514f7bf98f9e2cb4885beb3ac16b0eba3cdf87",
+          "downloadUrl": "https://images.unsplash.com/photo-1582385760710-4300982782c1?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 183290
+        },
+        {
+          "source": "https://unsplash.com/photos/cookies-and-milk-on-clear-drinking-glass-masNykYBu4g",
+          "url": "https://images.unsplash.com/photo-1615411450248-eb2b6406db66",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/cookies-2.jpg",
+          "sha256": "c0c7d9781d91a7d1a8abc6d63ee9e0d277f11fb1b9b7c2f95180050b62d78869",
+          "downloadUrl": "https://images.unsplash.com/photo-1615411450248-eb2b6406db66?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 176859
+        },
+        {
+          "source": "https://unsplash.com/fr/photos/biscuits-ZS3OfU40CQU",
+          "url": "https://images.unsplash.com/photo-1576717585968-8ea8166b89b8",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/cookies-3.jpg",
+          "sha256": "13fc3d95dfb642f82f27c7f4d06a7092010bf4bdd10bb149c999e16794dc2107",
+          "downloadUrl": "https://images.unsplash.com/photo-1576717585968-8ea8166b89b8?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 143416
+        }
+      ]
+    },
+    {
+      "key": "coffee-beans",
+      "name": "[体验] 咖啡豆",
+      "category": "drink",
+      "originalPriceFen": 9800,
+      "wholeQuantity": "2",
+      "unit": "斤",
+      "allowedShareUnits": [
+        30,
+        20,
+        15,
+        12
+      ],
+      "initialStockWholeItems": 20,
+      "description": "咖啡豆拼份体验商品。按需要选择份额，整件拼满后分别履约。此商品用于本地体验；照片为网络展示素材，包装与交付以实际信息为准。",
+      "images": [
+        {
+          "source": "https://unsplash.com/photos/a-pile-of-roasted-coffee-beans-HcDbE-iltf8",
+          "url": "https://images.unsplash.com/photo-1649790442619-39d05db11246",
+          "title": "A pile of roasted coffee beans photo – Free Coffee Image on Unsplash (https://unsplash.com/photos/a-pile-of-roasted-coffee-beans-HcDbE-iltf8)",
+          "license": "https://unsplash.com/license",
+          "file": "assets/coffee-beans-1.jpg",
+          "sha256": "4f6e5b838baa1901699f98c5deb9e6f71cd2aa45bc883e9272cab51b96b921f1",
+          "downloadUrl": "https://images.unsplash.com/photo-1649790442619-39d05db11246?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 180212
+        },
+        {
+          "source": "https://unsplash.com/photos/a-large-pile-of-coffee-beans-zvLCKrsAODA",
+          "url": "https://images.unsplash.com/photo-1643410223482-113e58195261",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/coffee-beans-2.jpg",
+          "sha256": "b82c56fb944ace1bc739e8ec4465504b0958588607e2f128c137ffa7be7c14fa",
+          "downloadUrl": "https://images.unsplash.com/photo-1643410223482-113e58195261?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 236502
+        },
+        {
+          "source": "https://unsplash.com/photos/coffee-beans-QSUbfuscL3s",
+          "url": "https://images.unsplash.com/photo-1578922538685-0155e12557c0",
+          "title": "",
+          "license": "https://unsplash.com/license",
+          "file": "assets/coffee-beans-3.jpg",
+          "sha256": "4f180555b3ac328bba60a12f2a5186a9e2bec029b772fcaab56288cd127579b2",
+          "downloadUrl": "https://images.unsplash.com/photo-1578922538685-0155e12557c0?fm=jpg&fit=max&w=1000&q=82",
+          "sizeBytes": 245139
+        }
+      ]
+    }
+  ]
+}

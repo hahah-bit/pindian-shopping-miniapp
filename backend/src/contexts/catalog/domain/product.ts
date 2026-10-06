@@ -3,6 +3,14 @@ import { Quantity } from './quantity';
 import { normalizeShareUnits, type ShareUnits } from './share-option';
 import { validateOriginalPriceFen } from './pricing';
 
+export const PRODUCT_CATEGORIES = ['fruit', 'snack', 'drink', 'other'] as const;
+export type ProductCategory = typeof PRODUCT_CATEGORIES[number];
+export function normalizeCategory(raw: unknown): ProductCategory {
+  if (raw === undefined || raw === null || raw === '') return 'other';
+  if (typeof raw !== 'string' || !PRODUCT_CATEGORIES.includes(raw as ProductCategory)) throw new ApplicationError('VALIDATION_FAILED', '商品分类无效');
+  return raw as ProductCategory;
+}
+
 export type ProductStatus = 'draft' | 'on_shelf' | 'off_shelf';
 
 export interface ProductImageRef {
@@ -12,6 +20,7 @@ export interface ProductImageRef {
 }
 
 export interface ProductState {
+  category?: ProductCategory;
   productId: string;
   name: string;
   description: string;
@@ -27,6 +36,7 @@ export interface ProductState {
 }
 
 export interface ProductInput {
+  category?: unknown;
   name: unknown;
   description?: unknown;
   originalPriceFen: unknown;
@@ -61,7 +71,7 @@ export class Product {
   }
 
   static rehydrate(state: ProductState): Product {
-    return new Product({ ...state, allowedShareUnits: [...state.allowedShareUnits], images: state.images.map((i) => ({ ...i })) });
+    return new Product({ ...state, category: normalizeCategory(state.category), allowedShareUnits: [...state.allowedShareUnits], images: state.images.map((i) => ({ ...i })) });
   }
 
   update(input: ProductInput, now: Date): Product {
@@ -118,6 +128,7 @@ export class Product {
 }
 
 interface EditableFields {
+  category: ProductCategory;
   name: string;
   description: string;
   originalPriceFen: number;
@@ -138,6 +149,7 @@ function validateEditableFields(input: ProductInput): EditableFields {
   if (unit.length < 1 || unit.length > 10) throw new ApplicationError('VALIDATION_FAILED', '计量单位须为 1-10 个字符');
   const allowedShareUnits = normalizeShareUnits(input.allowedShareUnits);
   return {
+    category: normalizeCategory(input.category),
     name,
     description,
     originalPriceFen,

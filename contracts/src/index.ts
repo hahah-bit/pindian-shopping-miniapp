@@ -112,6 +112,8 @@ export interface ShareOptionView {
 
 // ---------- 商品（F007 后台） ----------
 
+export type ProductCategory = 'fruit' | 'snack' | 'drink' | 'other';
+
 export type ProductStatus = 'draft' | 'on_shelf' | 'off_shelf';
 
 export type ProductStockStatus = 'available' | 'sold_out';
@@ -126,6 +128,7 @@ export interface ProductImageView {
 export interface AdminProductView {
   id: string;
   name: string;
+  category?: ProductCategory;
   description: string;
   originalPriceFen: number;
   userWholePriceFen: number;
@@ -143,6 +146,7 @@ export interface AdminProductView {
 }
 
 export interface AdminProductListItem {
+  category?: ProductCategory;
   id: string;
   name: string;
   originalPriceFen: number;
@@ -156,6 +160,7 @@ export interface AdminProductListItem {
 }
 
 export interface CreateProductRequest {
+  category?: ProductCategory;
   name: string;
   description?: string;
   originalPriceFen: number;
@@ -205,6 +210,7 @@ export interface StockAdjustmentResult {
 // ---------- 小程序商品（F008） ----------
 
 export interface MiniProductListItem {
+  category?: ProductCategory;
   id: string;
   name: string;
   mainImageUrl?: string;
@@ -217,6 +223,7 @@ export interface MiniProductListItem {
 export interface MiniProductView {
   id: string;
   name: string;
+  category?: ProductCategory;
   description: string;
   mainImageUrl?: string;
   detailImageUrls: string[];
