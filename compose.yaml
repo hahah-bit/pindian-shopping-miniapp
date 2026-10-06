@@ -35,6 +35,9 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       <<: *wechat-env
+      AI_SUPPORT_API_KEY: ${AI_SUPPORT_API_KEY:-}
+      AI_SUPPORT_BASE_URL: ${AI_SUPPORT_BASE_URL:-}
+      AI_SUPPORT_MODEL: ${AI_SUPPORT_MODEL:-}
       PORT: "3000"
       DATABASE_URL: postgresql://${POSTGRES_USER:-pindian}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-pindian}
       CORS_ORIGINS: ${CORS_ORIGINS:-}

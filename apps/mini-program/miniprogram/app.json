@@ -11,7 +11,8 @@
     "features/cs/pages/index/index",
     "features/cs/pages/ticket-form/index",
     "features/cs/pages/ticket-detail/index",
-    "features/notifications/pages/index/index"
+    "features/notifications/pages/index/index",
+    "features/ai-support/pages/chat/index"
   ],
   "window": {
     "navigationBarTitleText": "拼单购物",

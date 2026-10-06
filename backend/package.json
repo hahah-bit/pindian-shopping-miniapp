@@ -11,6 +11,8 @@
     "dev": "npm run build && node --env-file-if-exists=../.env --watch dist/bootstrap/main.js"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "1.0.4",
+    "@earendil-works/pi-ai": "1.0.4",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",
     "@nestjs/platform-express": "12.1.2",

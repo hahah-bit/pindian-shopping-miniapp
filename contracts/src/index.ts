@@ -628,3 +628,13 @@ export interface AdminAuditLogItem {
 export interface RolePermissionMatrix {
   roles: Array<{ role: AdminRole; label: string; permissions: AdminPermission[] }>;
 }
+/** T013 F051：仅本人可访问的智能问答轮次，不包含业务执行权限。 */
+export interface AiSupportTurnView {
+  id: string;
+  clientMessageId: string;
+  text: string;
+  reply: string | null;
+  status: 'pending' | 'completed' | 'failed';
+  createdAt: string;
+}
+export interface AiSupportHistoryView {items: AiSupportTurnView[]; nextBefore: string | null;}

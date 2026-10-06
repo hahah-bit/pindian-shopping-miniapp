@@ -3,6 +3,7 @@ import { ApplicationError } from '../shared/kernel';
 
 const APPLICATION_ERROR_STATUS: Record<string, number> = {
   VALIDATION_FAILED: 400,
+  AI_NOT_CONFIGURED:503, AI_BUSY:409, AI_UNAVAILABLE:502, AI_TIMEOUT:504,
   UNAUTHENTICATED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,

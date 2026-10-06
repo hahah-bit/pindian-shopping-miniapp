@@ -28,7 +28,7 @@ export interface TicketView {
   createdAt: string;
 }
 
-export function csRequest<T>(options: { path: string; method: 'GET' | 'POST'; body?: Record<string, unknown> }): Promise<T> {
+export function csRequest<T>(options: { path: string; method: 'GET' | 'POST'; body?: Record<string, unknown>; timeoutMs?: number }): Promise<T> {
   return new Promise((resolve, reject) => {
     const token = storedUserToken();
     if (!token) {
@@ -40,7 +40,7 @@ export function csRequest<T>(options: { path: string; method: 'GET' | 'POST'; bo
       method: options.method,
       data: options.body,
       header: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      timeout: 10000,
+      timeout: options.timeoutMs ?? 10000,
       success(response) {
         if (response.statusCode >= 200 && response.statusCode < 300 && response.data?.data !== undefined) {
           resolve(response.data.data);

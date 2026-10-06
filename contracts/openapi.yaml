@@ -1980,6 +1980,70 @@ paths:
   /api/admin/v1/after-sales/tickets/{id}/fulfillment: {"get":{"operationId":"getTicketFulfillmentSummary","summary":"工单归属范围内履约摘要，不返回地址","security":[{"bearerAuth":[]}],"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"responses":{"200":{"description":"成功","content":{"application/json":{"schema":{"type":"object","required":["data","requestId"],"properties":{"data":{"type":"object","properties":{"fulfillment":{"type":"object","nullable":true,"properties":{"id":{"type":"string","format":"uuid"},"unit":{"type":"string"},"status":{"type":"string"},"allocatedQuantityGrams":{"type":"integer"},"shippedQuantityGrams":{"type":"integer"},"refundHeld":{"type":"boolean"}}}}},"requestId":{"type":"string"}}}}}},"400":{"description":"请求或权限错误"},"401":{"description":"请求或权限错误"},"403":{"description":"请求或权限错误"},"404":{"description":"请求或权限错误"},"409":{"description":"请求或权限错误"}}}}
   /api/admin/v1/after-sales/requests/{id}/review: {"post":{"operationId":"reviewAfterSalesRequest","summary":"仅超级管理员审核，重复同决定同原因返回原结果；执行/action/审计同事务","security":[{"bearerAuth":[]}],"parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["decision","reason"],"properties":{"decision":{"type":"string","enum":["approve","reject"]},"reason":{"type":"string","minLength":1,"maxLength":1000}}}}}},"responses":{"200":{"description":"成功","content":{"application/json":{"schema":{"type":"object","required":["data","requestId"],"properties":{"data":{"type":"object","required":["request"],"properties":{"request":{"$ref":"#/components/schemas/AfterSalesActionRequest"}}},"requestId":{"type":"string"}}}}}},"400":{"description":"请求或权限错误"},"401":{"description":"请求或权限错误"},"403":{"description":"请求或权限错误"},"404":{"description":"请求或权限错误"},"409":{"description":"请求或权限错误"}}}}
   /api/admin/v1/fulfillment/blocks/{groupId}/orders/{orderId}/refund-request: {"post":{"operationId":"requestAnomalyRefund","summary":"真实零分配异常订单创建工单与待审核全额退款申请","security":[{"bearerAuth":[]}],"parameters":[{"name":"groupId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}},{"name":"orderId","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"type":"object","required":["reason","clientRequestId"],"properties":{"reason":{"type":"string","minLength":1,"maxLength":1000},"clientRequestId":{"type":"string","minLength":1,"maxLength":64}}}}}},"responses":{"202":{"description":"待审核申请已保存","content":{"application/json":{"schema":{"type":"object","required":["data","requestId"],"properties":{"data":{"type":"object","required":["request"],"properties":{"request":{"$ref":"#/components/schemas/AfterSalesActionRequest"}}},"requestId":{"type":"string"}}}}}},"400":{"description":"请求或权限错误"},"401":{"description":"请求或权限错误"},"403":{"description":"请求或权限错误"},"404":{"description":"请求或权限错误"},"409":{"description":"请求或权限错误"}}}}
+  /api/mini/v1/ai-support/messages:
+    get:
+      operationId: listAiSupportMessages
+      summary: 本人的智能问答历史（轮次UUID游标）
+      security: [{miniUserAuth: []}]
+      parameters:
+        - {name: before, in: query, schema: {type: string, format: uuid}, description: 本人轮次ID，按创建时间和ID向前翻页}
+        - {name: pageSize, in: query, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
+      responses:
+        '200':
+          description: 历史按从旧到新排列
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: {type: string}
+                  data:
+                    type: object
+                    required: [items, nextBefore]
+                    properties:
+                      items: {type: array, items: {$ref: '#/components/schemas/AiSupportTurn'}}
+                      nextBefore: {type: string, format: uuid, nullable: true}
+        '400': {description: 分页参数无效}
+        '401': {description: 用户未登录或已失效}
+        '404': {description: 本人消息游标不存在}
+    post:
+      operationId: sendAiSupportMessage
+      summary: 仅答疑；本人clientMessageId唯一，完成可重放，失败可同键重试
+      security: [{miniUserAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text, clientMessageId]
+              properties:
+                text: {type: string, minLength: 1, maxLength: 1000}
+                clientMessageId: {type: string, format: uuid}
+      responses:
+        '200':
+          description: 已完成或幂等重放
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, requestId]
+                properties:
+                  requestId: {type: string}
+                  data:
+                    type: object
+                    required: [turn, replayed]
+                    properties:
+                      turn: {$ref: '#/components/schemas/AiSupportTurn'}
+                      replayed: {type: boolean}
+        '400': {description: 消息格式无效}
+        '401': {description: 用户未登录或已失效}
+        '409': {description: AI_BUSY或同键内容冲突}
+        '429': {description: 同用户60秒最多10次尝试}
+        '502': {description: AI_UNAVAILABLE渠道异常}
+        '503': {description: AI_NOT_CONFIGURED配置缺失}
+        '504': {description: AI_TIMEOUT超过30秒}
 components:
   securitySchemes:
     bearerAuth:
@@ -2197,6 +2261,7 @@ components:
       type: object
       required: [id, name, description, originalPriceFen, userWholePriceFen, wholeQuantity, unit, allowedShareUnits, shareOptions, status, stockStatus, availableWholeItems, detailImages, createdAt, updatedAt]
       properties:
+        category: { type: string, enum: [fruit, snack, drink, other], default: other }
         id: { type: string, format: uuid }
         name: { type: string }
         description: { type: string }
@@ -2223,6 +2288,7 @@ components:
       type: object
       required: [id, name, originalPriceFen, wholeQuantity, unit, status, stockStatus, availableWholeItems, createdAt]
       properties:
+        category: { type: string, enum: [fruit, snack, drink, other], default: other }
         id: { type: string, format: uuid }
         name: { type: string }
         originalPriceFen: { type: integer }
@@ -2237,6 +2303,7 @@ components:
       type: object
       required: [name, originalPriceFen, wholeQuantity, unit, allowedShareUnits, initialStockWholeItems]
       properties:
+        category: { type: string, enum: [fruit, snack, drink, other], default: other }
         name: { type: string, minLength: 1, maxLength: 60 }
         description: { type: string, maxLength: 2000 }
         originalPriceFen: { type: integer, minimum: 1, maximum: 99999999 }
@@ -2295,6 +2362,7 @@ components:
       type: object
       required: [id, name, originalPriceFen, userWholePriceFen, priceFromFen, stockStatus]
       properties:
+        category: { type: string, enum: [fruit, snack, drink, other], default: other }
         id: { type: string, format: uuid }
         name: { type: string }
         mainImageUrl: { type: string }
@@ -2306,6 +2374,7 @@ components:
       type: object
       required: [id, name, description, detailImageUrls, originalPriceFen, userWholePriceFen, priceFromFen, wholeQuantity, unit, shareOptions, stockStatus]
       properties:
+        category: { type: string, enum: [fruit, snack, drink, other], default: other }
         id: { type: string, format: uuid }
         name: { type: string }
         description: { type: string }
@@ -2604,3 +2673,14 @@ components:
     CsImage: {"type":"object","properties":{"id":{"type":"string","format":"uuid"},"width":{"type":"integer"},"height":{"type":"integer"}}}
 
     CsAccount: {"type":"object","properties":{"id":{"type":"string","format":"uuid"},"username":{"type":"string"},"displayName":{"type":"string"},"role":{"type":"string","enum":["cs_agent","cs_supervisor"]},"status":{"type":"string","enum":["active","disabled"]}}}
+
+    AiSupportTurn:
+      type: object
+      required: [id, clientMessageId, text, reply, status, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        clientMessageId: {type: string, format: uuid}
+        text: {type: string, maxLength: 1000}
+        reply: {type: string, maxLength: 4000, nullable: true}
+        status: {type: string, enum: [pending, completed, failed]}
+        createdAt: {type: string, format: date-time}

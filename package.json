@@ -41,6 +41,7 @@
     "sim:down": "node scripts/simulation/stack.mjs down",
     "sim:status": "node scripts/simulation/stack.mjs status",
     "release:preflight": "node --env-file=.env.production scripts/release/preflight.mjs",
-    "release:rehearsal:init": "node scripts/release/rehearsal-init.mjs"
+    "release:rehearsal:init": "node scripts/release/rehearsal-init.mjs",
+    "test:task:t013": "npm run build && npm run check:architecture && node scripts/run-all-tests.mjs t013"
   }
 }

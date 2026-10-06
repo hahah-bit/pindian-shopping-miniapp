@@ -36,7 +36,7 @@ Page({
         history:history.items.map(c=>({id:c.id,statusText:c.status==='ended'?'已结束':c.status==='converted'?'已转工单':c.status==='queued'?'排队留言':'接待中'})),historyPage:1,historyTotal:history.total
       });
     } catch (cause) {
-      if (cause instanceof UserAuthExpiredError) { wx.navigateTo({ url: '/features/profile/pages/index/index' }); return; }
+      if (cause instanceof UserAuthExpiredError) { this.setData({loading:false});wx.switchTab({ url: '/features/profile/pages/index/index' }); return; }
       this.setData({ loading: false, error: cause instanceof Error ? cause.message : '加载失败' });
     }
   },
@@ -62,6 +62,7 @@ Page({
   retry() {
     void this.load();
   },
+  openAi(){wx.navigateTo({url:'/features/ai-support/pages/chat/index'});},
   create(){wx.navigateTo({url:'/features/cs/pages/ticket-form/index'});},
   openTicket(e:WechatMiniprogram.TouchEvent){wx.navigateTo({url:`/features/cs/pages/ticket-detail/index?id=${e.currentTarget.dataset.id}`});},
   async moreTickets(){try{const r=await listMyTickets(this.data.ticketPage+1);this.setData({ticketPage:this.data.ticketPage+1,tickets:[...this.data.tickets,...r.items.map(t=>({id:t.id,title:t.title,typeText:TICKET_TYPE_TEXT[t.type]??t.type,statusText:TICKET_STATUS_TEXT[t.status]??t.status}))]});}catch(e){wx.showToast({title:e instanceof Error?e.message:'读取失败',icon:'none'});}},
