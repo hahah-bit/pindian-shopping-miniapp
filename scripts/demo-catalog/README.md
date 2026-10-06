@@ -9,4 +9,4 @@ docker compose cp scripts/demo-catalog api:/tmp/demo-catalog
 docker compose exec -T api node backend/dist/bootstrap/seed-demo-catalog.js /tmp/demo-catalog/manifest.json
 ```
 
-重跑按固定描述标识查重，已存在的商品跳过，半途草稿恢复上架。媒体目录保留检查点，导入失败可重跑。清单和本地照片长期保留以支持离线重建；不得将演示导入作为正式生产数据迁移。
+重跑优先按媒体检查点中的商品ID查重，兼容按固定描述标识恢复，已存在的商品跳过，半途草稿恢复上架。媒体目录保留检查点，导入失败可重跑。清单和本地照片长期保留以支持离线重建；不得将演示导入作为正式生产数据迁移。

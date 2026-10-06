@@ -129,7 +129,7 @@ export class MiniCatalogQueries {
       id: product.state.productId,
       name: product.state.name,
         category: product.state.category ?? 'other',
-      description: product.state.description,
+      description: product.state.description.replace(/\n?\[demo-catalog-v1:[a-z0-9-]+\]/g, '').trim(),
       mainImageUrl: product.mainImage ? this.deps.urlBuilder.build(product.mainImage.mediaId) : undefined,
       detailImageUrls: product.detailImages.map((image) => this.deps.urlBuilder.build(image.mediaId)),
       originalPriceFen: product.state.originalPriceFen,
