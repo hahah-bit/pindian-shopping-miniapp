@@ -20,3 +20,5 @@
 5. 审计通过后创建公开hahah-bit/pindian-shopping-miniapp、配置origin并推送main；核对远端SHA及PUBLIC可见性，回写本地结果。
 
 测试策略：本次是Git排除与源码传输维护，无业务/API/部署逻辑变更，不采用TDD，不重复运行应用全量或编写镜像式测试；以实际check-ignore、历史凭据检查、git diff --check与真实远端核验覆盖GH01–03。最新应用验收仍以T015最终专项24/24、全量339/339为准，不能声称本次重跑了它们。
+
+完成：步骤1–5已执行。忽略规则提交402e90b后再扫描1458个历史blob，findings为空；公开仓库创建及main首轮推送成功，远端SHA与本地402e90bb119ed90f5ac4dad0f73e812a8120c5da一致。GitHub树中环境文件仅两个无真实密钥模板。实际结果见verification；本段收尾记录通过独立docs提交同步，原未提交文件保留。

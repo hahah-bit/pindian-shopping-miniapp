@@ -15,4 +15,7 @@
 - GH02：`git ls-files`及`git log --all`证实.env、backend/.env及私有开发者配置从未进入Git；本机临时审计读取当前.env仅做凭据比对，扫描1452个历史blob/940个已跟踪文件，比对当前数据库密码/连接串、微信AppSecret与AI Key，并检查高置信度令牌/私钥格式，findings为空、exit0。审计输出只有种类/路径/计数，无密钥值，临时脚本/报告留在.git而非源码。此检查不声称能发现所有未知格式秘密。
 - `git diff --check`通过；只精确暂存本次.gitignore与F048维护说明，协调/T005原未提交内容保留。没有改写历史，没有强推。
 - 本次未运行应用专项/全量：只改Git忽略与源码传输维护，实际Git检查覆盖维护规范；应用最近实际验收为T015专项24/24后全量339/339。
-- GH03创建、推送及远端HEAD/可见性核验待执行，实际完成后回写。
+- 忽略规则提交`402e90b chore(git): 完善公开仓库凭据与本地数据忽略规则`后再次执行历史审计：1458个blob，findings为空、exit0；所有检查只针对已跟踪Git内容，不导出本机.env。
+- GH03通过：`gh repo create hahah-bit/pindian-shopping-miniapp --public --source . --remote origin`实际创建成功；随后`git push -u origin main`（命令级GitHub CLI凭据助手，不把令牌写入remote URL）exit0，main已跟踪origin/main。仓库[https://github.com/hahah-bit/pindian-shopping-miniapp](https://github.com/hahah-bit/pindian-shopping-miniapp)。
+- `gh repo view ... --json url,visibility,defaultBranchRef`核验PUBLIC、默认分支main；首轮本地HEAD与`git ls-remote origin refs/heads/main`均为`402e90bb119ed90f5ac4dad0f73e812a8120c5da`。GitHub远端树查询仅见`.env.example`、`.env.production.example`，无.env或变体秘密文件。
+- 本次公开源码维护已完成；后续仅同步本段真实发布记录，仍精确暂存。工作区原协调文件与T005目录保持未提交；不宣称小程序正式上线或安卓真机已验。
