@@ -14,3 +14,11 @@ package CLI仅从已解析Git提交导出source.tar，独立目录构建API/admi
 切换镜像前暂停API/Worker，重建后重启admin/gateway刷新上游DNS，再等待整体健康；失败保留failed目标记录与旧版本信息，不自动降数据库。运维脚本读取当前image overlay，备份/健康不静默恢复.env里的旧标签。大镜像包SHA采用分块读取以限制内存。
 
 全量发现并复现：rehearsal:init工作区构建使用生产Git包同标签，可能覆盖封存image ID，造成发布No such image。整改：工作区独立pindian-rehearsal-*命名空间，封存包只从Git快照构建；一键prepare从已校验离线镜像归档load后核对全部image ID。全量新增Docker/多Nest装置后旧HTTP启动8秒超时，runner限制4个测试文件并发，测试/断言/专项筛选不变。
+
+## 2026-10-07 公开源码推送维护规范
+
+目标仓库hahah-bit/pindian-shopping-miniapp，公开；用户已授权创建与推送，不重复请求确认。仅提交本次Git排除规则与发布记录，保留协调/T005原未提交文件。发布现有main已验收提交，不改写历史、不强推，不代表公网应用上线。
+
+- GH01：.env及变体、*.env、私钥/证书私钥容器、私有开发者配置、凭据目录、本机运行数据与验收截图被忽略；仅保留已确认不含真实密钥的.env.example和.env.production.example。
+- GH02：检查当前索引及所有历史对象，真实本地凭据值不出现在待公开内容；审计输出不得包含值。发现真实泄露时停止推送并记录，不私自改写历史。
+- GH03：创建公开仓库、配置origin、推送main；核对GitHub默认分支、可见性及远端HEAD与本地SHA一致。不将未提交文件打包上传。

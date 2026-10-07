@@ -6,4 +6,4 @@
 - 当前状态：已完成（本地范围）；阻塞项：无本地范围阻塞。
 - 所属大任务：[T012-release-readiness](../../tasks/T012-release-readiness/README.md)；[整体 spec](../../tasks/T012-release-readiness/spec.md)、[整体 plan](../../tasks/T012-release-readiness/plan.md)。
 - 文件索引：ddd.md/spec.md/plan.md；验证时创建 verification.md。
-
+- 2026-10-07公开GitHub源码维护：用户授权公开hahah-bit/pindian-shopping-miniapp，.env与凭据排除检查通过；推送与远端核验进行中。此项不是应用服务器上线。

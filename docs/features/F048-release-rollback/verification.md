@@ -7,3 +7,12 @@
 - 一键rehearsal-prepare实际执行成功（.git/t012-fixed-prepare.log）。全量后模拟Docker重新构建五服务健康；身份/手机号及商品→乱序支付→实际Worker履约→通知→看板冒烟通过；HTTPS演练源API/Worker/PG/admin/gateway健康。
 
 本轮仅本地模拟；真实微信到账/触达/真机/体验版/公网部署未执行，详见[runbook](../../tasks/T012-release-readiness/runbook.md)。最终Git快照包在本功能提交后生成，包与备份/配置忽略，不进入Git。
+
+## 2026-10-07 公开GitHub源码维护
+
+- 用户明确授权公开仓库并允许Agent命名，禁止提交.env；目标hahah-bit/pindian-shopping-miniapp。账号通过GitHub CLI验证已登录。无领域/应用运行逻辑变更。
+- GH01：`node .git/design-references/check-github-ignore.cjs`实际执行成功，18个敏感/本地路径被忽略，6个公开源码/示例路径保留。覆盖根/嵌套.env与变体、*.env、私钥与证书容器、凭据目录、开发者私有配置、媒体/数据库数据和实际验收截图。只保留.env.example与.env.production.example配置模板。
+- GH02：`git ls-files`及`git log --all`证实.env、backend/.env及私有开发者配置从未进入Git；本机临时审计读取当前.env仅做凭据比对，扫描1452个历史blob/940个已跟踪文件，比对当前数据库密码/连接串、微信AppSecret与AI Key，并检查高置信度令牌/私钥格式，findings为空、exit0。审计输出只有种类/路径/计数，无密钥值，临时脚本/报告留在.git而非源码。此检查不声称能发现所有未知格式秘密。
+- `git diff --check`通过；只精确暂存本次.gitignore与F048维护说明，协调/T005原未提交内容保留。没有改写历史，没有强推。
+- 本次未运行应用专项/全量：只改Git忽略与源码传输维护，实际Git检查覆盖维护规范；应用最近实际验收为T015专项24/24后全量339/339。
+- GH03创建、推送及远端HEAD/可见性核验待执行，实际完成后回写。

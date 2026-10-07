@@ -3,7 +3,20 @@ dist/
 coverage/
 .env
 .env.*
+*.env
+.envrc
 !.env.example
+!.env.production.example
+
+# 本地凭据、私钥与开发者配置
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+credentials/
+secrets/
+project.private.config.json
 *.log
 *.tsbuildinfo
 apps/mini-program/project.private.config.json
@@ -11,8 +24,8 @@ apps/mini-program/project.private.config.json
 backup/
 data/simulation/
 data/release/
-
-!.env.production.example
+data/media/
+data/postgres/
 
 # 实际页面验收截图留在本机，可能包含本人资料
 .impeccable/review/
